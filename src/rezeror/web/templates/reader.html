@@ -28,14 +28,23 @@
   </nav>
 
   <section class="reader-controls" aria-label="Reader options">
-  <div class="reader-font-control" aria-label="Adjust text size">
+  <div class="reader-font-control" aria-label="Adjust text size and contrast">
     <div class="font-track" data-font-track>
-      <span class="font-track-glyph font-track-glyph-small" aria-hidden="true">A</span>
-      <div class="font-rail" data-font-rail>
-        <div class="font-track-fill" data-font-fill></div>
-        <div class="font-handle" data-font-handle tabindex="0" role="slider" aria-label="Reader font size" aria-valuemin="14" aria-valuemax="24" aria-valuenow="18" aria-valuetext="18 pixels"></div>
+      <div class="font-track-side font-track-side-left">
+        <span class="font-track-glyph font-track-glyph-small" aria-hidden="true">A</span>
+        <div class="font-rail" data-font-rail>
+          <div class="font-track-fill" data-font-fill></div>
+          <div class="font-handle" data-font-handle tabindex="0" role="slider" aria-label="Reader font size" aria-valuemin="14" aria-valuemax="24" aria-valuenow="18" aria-valuetext="18 pixels"></div>
+        </div>
       </div>
-      <span class="font-track-glyph font-track-glyph-large" aria-hidden="true">A</span>
+      <div class="font-track-center" aria-hidden="true"></div>
+      <div class="font-track-side font-track-side-right">
+        <div class="contrast-rail" data-contrast-rail>
+          <div class="contrast-track-fill" data-contrast-fill></div>
+          <div class="contrast-handle" data-contrast-handle tabindex="0" role="slider" aria-label="Reader text contrast" aria-valuemin="70" aria-valuemax="115" aria-valuenow="100" aria-valuetext="100 percent"></div>
+        </div>
+        <span class="contrast-track-glyph" aria-hidden="true">Ct</span>
+      </div>
     </div>
   </div>
 
@@ -51,6 +60,10 @@
     <span class="reader-metric">
       <span class="reader-metric-icon" aria-hidden="true">Aa</span>
       <span class="reader-width-value" data-reader-font-value>18px</span>
+    </span>
+    <span class="reader-metric">
+      <span class="reader-metric-icon" aria-hidden="true">Ct</span>
+      <span class="reader-width-value" data-reader-contrast-value>100%</span>
     </span>
     <span class="reader-metric">
       <span class="reader-metric-icon" aria-hidden="true">&lt;&gt;</span>

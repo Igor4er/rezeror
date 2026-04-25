@@ -121,22 +121,56 @@
   const fontFill = document.querySelector("[data-font-fill]");
   const fontHandle = document.querySelector("[data-font-handle]");
   const fontValue = document.querySelector("[data-reader-font-value]");
+  const contrastRail = document.querySelector("[data-contrast-rail]");
+  const contrastFill = document.querySelector("[data-contrast-fill]");
+  const contrastHandle = document.querySelector("[data-contrast-handle]");
+  const contrastValue = document.querySelector("[data-reader-contrast-value]");
   const widthStorageKey = "rezeror:reader-width";
   const fontStorageKey = "rezeror:reader-font-size";
+  const contrastStorageKey = "rezeror:reader-text-contrast";
   const minWidth = 620;
   const maxWidth = 1100;
   const widthStep = 20;
   const minFontSize = 14;
   const maxFontSize = 24;
   const fontStep = 0.5;
+  const minContrast = 70;
+  const maxContrast = 115;
+  const contrastStep = 5;
   let currentWidth = 760;
   let currentFontSize = 18;
+  let currentContrast = 100;
 
   const formatFontSize = (value) => {
     if (Number.isInteger(value)) {
       return String(value);
     }
     return value.toFixed(1).replace(/\.0$/, "");
+  };
+
+  const contrastStops = [
+    { value: minContrast, color: [184, 177, 165] },
+    { value: 100, color: [242, 240, 233] },
+    { value: maxContrast, color: [255, 250, 242] },
+  ];
+
+  const interpolateChannel = (from, to, progress) => from + (to - from) * progress;
+
+  const colorForContrast = (value) => {
+    for (let i = 0; i < contrastStops.length - 1; i += 1) {
+      const start = contrastStops[i];
+      const end = contrastStops[i + 1];
+      if (value <= end.value) {
+        const progress = (value - start.value) / (end.value - start.value || 1);
+        const rgb = start.color.map((channel, index) =>
+          Math.round(interpolateChannel(channel, end.color[index], progress))
+        );
+        return `rgb(${rgb[0]} ${rgb[1]} ${rgb[2]})`;
+      }
+    }
+
+    const fallback = contrastStops[contrastStops.length - 1].color;
+    return `rgb(${fallback[0]} ${fallback[1]} ${fallback[2]})`;
   };
 
   const updateRulerUI = () => {
@@ -228,6 +262,51 @@
     }
   };
 
+  const updateContrastUI = () => {
+    if (!contrastRail || !contrastHandle) {
+      return;
+    }
+
+    const railRect = contrastRail.getBoundingClientRect();
+    if (railRect.width === 0) {
+      return;
+    }
+
+    const progress = (currentContrast - minContrast) / (maxContrast - minContrast);
+    const handleLeft = railRect.width * progress;
+
+    contrastHandle.style.left = `${handleLeft}px`;
+    contrastHandle.setAttribute("aria-valuenow", String(currentContrast));
+    contrastHandle.setAttribute("aria-valuetext", `${currentContrast} percent`);
+
+    if (contrastFill) {
+      contrastFill.style.width = `${handleLeft}px`;
+    }
+
+    if (contrastValue) {
+      contrastValue.textContent = `${currentContrast}%`;
+    }
+  };
+
+  const applyReaderContrast = (rawValue, save) => {
+    const numeric = Number(rawValue);
+    if (!Number.isFinite(numeric)) {
+      return;
+    }
+
+    currentContrast = Math.min(
+      maxContrast,
+      Math.max(minContrast, Math.round(numeric / contrastStep) * contrastStep)
+    );
+    document.documentElement.style.setProperty("--reader-text-color", colorForContrast(currentContrast));
+    updateContrastUI();
+    if (save) {
+      try {
+        window.localStorage.setItem(contrastStorageKey, String(currentContrast));
+      } catch (_) {}
+    }
+  };
+
   try {
     applyReaderWidth(window.localStorage.getItem(widthStorageKey) || 760, false);
   } catch (_) {
@@ -238,6 +317,12 @@
     applyReaderFontSize(window.localStorage.getItem(fontStorageKey) || 18, false);
   } catch (_) {
     applyReaderFontSize(18, false);
+  }
+
+  try {
+    applyReaderContrast(window.localStorage.getItem(contrastStorageKey) || 100, false);
+  } catch (_) {
+    applyReaderContrast(100, false);
   }
 
   const makeHandleDraggable = (handle, side) => {
@@ -346,6 +431,67 @@
     });
 
     new ResizeObserver(updateFontUI).observe(fontRail);
+  }
+
+  if (contrastRail && contrastHandle) {
+    const positionToContrast = (clientX) => {
+      const rect = contrastRail.getBoundingClientRect();
+      if (rect.width === 0) {
+        return;
+      }
+
+      const clampedX = Math.min(rect.width, Math.max(0, clientX - rect.left));
+      const progress = clampedX / rect.width;
+      const contrast = minContrast + progress * (maxContrast - minContrast);
+      applyReaderContrast(contrast, true);
+    };
+
+    const onMouseMove = (e) => positionToContrast(e.clientX);
+    const onMouseUp = () => {
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+    };
+    contrastHandle.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
+    });
+
+    const onTouchMove = (e) => {
+      e.preventDefault();
+      positionToContrast(e.touches[0].clientX);
+    };
+    const onTouchEnd = () => {
+      document.removeEventListener("touchmove", onTouchMove);
+      document.removeEventListener("touchend", onTouchEnd);
+    };
+    contrastHandle.addEventListener("touchstart", (e) => {
+      e.preventDefault();
+      document.addEventListener("touchmove", onTouchMove, { passive: false });
+      document.addEventListener("touchend", onTouchEnd);
+    });
+
+    contrastRail.addEventListener("mousedown", (e) => {
+      positionToContrast(e.clientX);
+    });
+
+    contrastHandle.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowRight") {
+        applyReaderContrast(currentContrast + contrastStep, true);
+        e.preventDefault();
+      } else if (e.key === "ArrowLeft") {
+        applyReaderContrast(currentContrast - contrastStep, true);
+        e.preventDefault();
+      } else if (e.key === "Home") {
+        applyReaderContrast(minContrast, true);
+        e.preventDefault();
+      } else if (e.key === "End") {
+        applyReaderContrast(maxContrast, true);
+        e.preventDefault();
+      }
+    });
+
+    new ResizeObserver(updateContrastUI).observe(contrastRail);
   }
 
   if (rulerTrack) {
