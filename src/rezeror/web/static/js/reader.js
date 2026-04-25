@@ -49,7 +49,8 @@
 
   const chapterPath = root.getAttribute("data-chapter-path");
   const initialScroll = Number(root.getAttribute("data-saved-scroll") || "0");
-  const hasSavedProgress = root.getAttribute("data-has-saved-progress") === "1";
+  const rawHasSavedProgress = (root.getAttribute("data-has-saved-progress") || "").toLowerCase();
+  const hasSavedProgress = rawHasSavedProgress === "1" || rawHasSavedProgress === "true";
 
   const normalizeText = (value) =>
     (value || "")
@@ -157,16 +158,31 @@
     return null;
   };
 
-  if (hasSavedProgress && initialScroll > 0) {
-    window.requestAnimationFrame(() => {
-      window.scrollTo({ top: initialScroll, behavior: "instant" });
-    });
-  } else if (!hasSavedProgress) {
+  const computeTopOffset = () => {
+    const stickyHeader = document.querySelector(".site-header");
+    const stickyHeight = stickyHeader ? Math.ceil(stickyHeader.getBoundingClientRect().height) : 0;
+    return stickyHeight + 12;
+  };
+
+  if (hasSavedProgress) {
+    if (initialScroll > 0) {
+      window.requestAnimationFrame(() => {
+        window.scrollTo({ top: initialScroll, behavior: "auto" });
+      });
+    }
+  } else {
     const autoStartElement = findAutoStartElement();
     if (autoStartElement) {
       window.requestAnimationFrame(() => {
-        const top = Math.max(0, Math.floor(autoStartElement.getBoundingClientRect().top + window.scrollY - 24));
-        window.scrollTo({ top, behavior: "instant" });
+        const top = Math.max(
+          0,
+          Math.floor(autoStartElement.getBoundingClientRect().top + window.scrollY - computeTopOffset())
+        );
+        window.scrollTo({ top, behavior: "auto" });
+        // Mark chapter as initialized even when user leaves quickly after opening.
+        window.setTimeout(() => {
+          persist();
+        }, 0);
       });
     }
   }

@@ -2,14 +2,25 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
-
+from urllib.parse import urlsplit
+import hmac
 import markdown
 import yaml
 from bs4 import BeautifulSoup
-from flask import Flask, abort, jsonify, render_template, request
+from flask import Flask, abort, jsonify, redirect, render_template, request, session, url_for
+from flask.typing import ResponseReturnValue
+from hashlib import sha256
 
-from rezeror.config import CHAPTERS_DIR, MANIFEST_PATH, ensure_data_dirs
+from rezeror.config import (
+    CHAPTERS_DIR,
+    MANIFEST_PATH,
+    ensure_data_dirs,
+    owner_auth_enabled,
+    owner_credentials,
+    session_secret,
+)
 from rezeror.parser.storage import load_json
+from rezeror.parser.sync import sync
 from rezeror.web.progress import get_progress, has_progress, init_progress_db, save_progress
 
 
@@ -49,10 +60,14 @@ def _render_markdown_with_toc(markdown_text: str) -> tuple[str, list[dict[str, s
     soup = BeautifulSoup(html, "html.parser")
     toc_items: list[dict[str, str]] = []
     for heading in soup.select("h1[id], h2[id], h3[id], h4[id], h5[id], h6[id]"):
+        heading_id = heading.get("id", "")
+        if not isinstance(heading_id, str):
+            heading_id = ""
+        heading_level = str(heading.name or "")
         toc_items.append(
             {
-                "id": heading.get("id", ""),
-                "level": heading.name,
+                "id": heading_id,
+                "level": heading_level,
                 "text": heading.get_text(" ", strip=True),
             }
         )
@@ -91,6 +106,68 @@ def _group_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return grouped_list
 
 
+def _owner_logged_in() -> bool:
+    return session.get("is_owner") is True
+
+
+def _json_error(message: str, status: int) -> ResponseReturnValue:
+    return jsonify({"error": message}), status
+
+
+def _require_owner_json() -> ResponseReturnValue | None:
+    if not owner_auth_enabled():
+        return _json_error("owner authentication is not configured", 503)
+    if not _owner_logged_in():
+        return _json_error("owner authentication required", 403)
+    return None
+
+
+def _wants_json_response() -> bool:
+    if request.is_json:
+        return True
+    best = request.accept_mimetypes.best_match(["application/json", "text/html"])
+    return best == "application/json"
+
+
+def _safe_next_path(raw_next: str | None) -> str:
+    if not raw_next:
+        return url_for("library")
+    parsed = urlsplit(raw_next)
+    # Allow only local app-relative redirects.
+    if parsed.scheme or parsed.netloc:
+        return url_for("library")
+    if not raw_next.startswith("/"):
+        return url_for("library")
+    return raw_next
+
+
+def _extract_owner_login_payload() -> tuple[str, str, str]:
+    if request.is_json:
+        payload = request.get_json(silent=True) or {}
+        username = str(payload.get("username", "")).strip()
+        password = str(payload.get("password", ""))
+        next_path = _safe_next_path(payload.get("next"))
+        return username, password, next_path
+
+    form = request.form
+    username = (form.get("username") or "").strip()
+    password = form.get("password") or ""
+    next_path = _safe_next_path(form.get("next"))
+    return username, password, next_path
+
+
+def _owner_login_failure(message: str, status: int, next_path: str) -> ResponseReturnValue:
+    if _wants_json_response():
+        return _json_error(message, status)
+    return render_template("owner_login.html", next_path=next_path, error=message), status
+
+
+def _owner_login_success(next_path: str) -> ResponseReturnValue:
+    if _wants_json_response():
+        return jsonify({"ok": True})
+    return redirect(next_path)
+
+
 def create_app() -> Flask:
     ensure_data_dirs()
     init_progress_db()
@@ -100,6 +177,7 @@ def create_app() -> Flask:
         template_folder="templates",
         static_folder="static",
     )
+    app.config["SECRET_KEY"] = session_secret()
 
     @app.get("/")
     @app.get("/library")
@@ -184,6 +262,34 @@ def create_app() -> Flask:
             progress_info=progress_info,
         )
 
+    @app.get("/owner/login")
+    def owner_login_form() -> ResponseReturnValue:
+        next_path = _safe_next_path(request.args.get("next"))
+        if _owner_logged_in():
+            return redirect(next_path)
+        return render_template("owner_login.html", next_path=next_path, error=None)
+
+    @app.post("/owner/login")
+    def owner_login_submit() -> ResponseReturnValue:
+        username, password, next_path = _extract_owner_login_payload()
+
+        if not owner_auth_enabled():
+            return _owner_login_failure("owner authentication is not configured", 503, next_path)
+
+        expected_username, expected_password = owner_credentials()
+        if username == expected_username and hmac.compare_digest(sha256(expected_password.encode()).digest(), sha256(password.encode()).digest()):
+            session["is_owner"] = True
+            return _owner_login_success(next_path)
+
+        return _owner_login_failure("invalid credentials", 403, next_path)
+
+    @app.post("/owner/logout")
+    def owner_logout() -> ResponseReturnValue:
+        session.pop("is_owner", None)
+        if _wants_json_response():
+            return jsonify({"ok": True})
+        return redirect(url_for("library"))
+
     @app.get("/api/progress")
     def api_progress_get():
         chapter_path = request.args.get("chapter_path", "")
@@ -203,6 +309,10 @@ def create_app() -> Flask:
 
     @app.post("/api/progress")
     def api_progress_save():
+        auth_error = _require_owner_json()
+        if auth_error:
+            return auth_error
+
         payload = request.get_json(silent=True) or {}
         chapter_path = payload.get("chapter_path", "")
         scroll_y = payload.get("scroll_y", 0)
@@ -221,5 +331,28 @@ def create_app() -> Flask:
 
         save_progress(chapter_path, scroll_int)
         return jsonify({"ok": True})
+
+    @app.post("/api/sync")
+    def api_sync():
+        auth_error = _require_owner_json()
+        if auth_error:
+            return auth_error
+
+        payload = request.get_json(silent=True) or {}
+        arc = payload.get("arc")
+        force_recheck = bool(payload.get("force_recheck", False))
+
+        if arc in (None, ""):
+            arc_filter = None
+        else:
+            try:
+                arc_filter = int(arc)
+            except (TypeError, ValueError):
+                return _json_error("arc must be an integer", 400)
+            if arc_filter <= 0:
+                return _json_error("arc must be positive", 400)
+
+        result = sync(arc_filter=arc_filter, force_recheck=force_recheck)
+        return jsonify(result)
 
     return app

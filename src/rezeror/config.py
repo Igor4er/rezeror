@@ -1,18 +1,45 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
+
+def _env_path(name: str, default: Path) -> Path:
+    raw = os.getenv(name)
+    if not raw:
+        return default
+
+    candidate = Path(raw).expanduser()
+    if candidate.is_absolute():
+        return candidate
+    return (PROJECT_ROOT / candidate).resolve()
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DATA_DIR = PROJECT_ROOT / "data"
+DATA_DIR = _env_path("REZEROR_DATA_DIR", PROJECT_ROOT / "data")
 CHAPTERS_DIR = DATA_DIR / "chapters"
 STATE_DIR = DATA_DIR / "state"
 MANIFEST_PATH = STATE_DIR / "manifest.json"
 SYNC_STATE_PATH = STATE_DIR / "sync_state.json"
-PROGRESS_DB_PATH = DATA_DIR / "progress.sqlite3"
+PROGRESS_DB_PATH = _env_path("REZEROR_DB_PATH", DATA_DIR / "progress.sqlite3")
 TOC_URL = "https://witchculttranslation.com/table-of-content/"
-USER_AGENT = "rezeror-bot/0.1 (+https://github.com/example/rezeror)"
+USER_AGENT = "rezeror-bot/0.1 (+https://github.com/Igor4er/rezeror)"
+
+
+def owner_auth_enabled() -> bool:
+    return bool(os.getenv("REZEROR_OWNER_PASSWORD"))
+
+
+def owner_credentials() -> tuple[str, str]:
+    username = os.getenv("REZEROR_OWNER_USERNAME", "owner")
+    password = os.getenv("REZEROR_OWNER_PASSWORD", "")
+    return username, password
+
+
+def session_secret() -> str:
+    return os.getenv("REZEROR_SESSION_SECRET", "rezeror-dev-session-secret")
 
 
 def ensure_data_dirs() -> None:
     CHAPTERS_DIR.mkdir(parents=True, exist_ok=True)
     STATE_DIR.mkdir(parents=True, exist_ok=True)
+    PROGRESS_DB_PATH.parent.mkdir(parents=True, exist_ok=True)

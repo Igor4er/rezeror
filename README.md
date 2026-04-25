@@ -67,6 +67,40 @@ Run web app:
 uv run rezeror serve --host 127.0.0.1 --port 5000
 ```
 
+## Environment Variables
+
+You can override storage locations and owner auth with env vars:
+
+- `REZEROR_DATA_DIR`: base data directory (default: `./data` under project root)
+- `REZEROR_DB_PATH`: SQLite progress DB path (default: `<REZEROR_DATA_DIR>/progress.sqlite3`)
+- `REZEROR_OWNER_USERNAME`: owner login username (default: `owner`)
+- `REZEROR_OWNER_PASSWORD`: owner login password (required to enable owner-only writes)
+- `REZEROR_SESSION_SECRET`: Flask session signing secret (set this in production)
+
+The app creates missing folders automatically for chapters/state and for the progress DB parent directory.
+
+Example:
+
+```bash
+export REZEROR_DATA_DIR=/app/data
+export REZEROR_DB_PATH=/app/state/progress.sqlite3
+export REZEROR_OWNER_USERNAME=ihor
+export REZEROR_OWNER_PASSWORD='strong-password'
+export REZEROR_SESSION_SECRET='long-random-secret'
+```
+
+## Owner-Protected API Routes
+
+- `POST /owner/login` supports form submit and JSON body `{ "username": "...", "password": "..." }`
+- `POST /owner/logout` supports both browser and JSON clients
+- `POST /api/progress` is owner-only (public can still read via `GET /api/progress`)
+- `POST /api/sync` is owner-only and supports:
+	- `{}` for full sync
+	- `{ "arc": 3 }` for one arc
+	- `{ "force_recheck": true }` to force chapter checks
+
+There is also a web login page at `/owner/login`.
+
 You can also run the entry script directly:
 
 ```bash
