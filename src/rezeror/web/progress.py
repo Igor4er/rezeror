@@ -60,6 +60,21 @@ def has_progress(chapter_path: str) -> bool:
     return row is not None
 
 
+def get_last_read_chapter_path() -> str | None:
+    with _connect() as conn:
+        row = conn.execute(
+            """
+            SELECT chapter_path
+            FROM progress
+            ORDER BY updated_at DESC, chapter_path DESC
+            LIMIT 1
+            """
+        ).fetchone()
+    if row is None:
+        return None
+    return str(row["chapter_path"])
+
+
 def count_progress_rows() -> int:
     init_progress_db()
     with _connect() as conn:

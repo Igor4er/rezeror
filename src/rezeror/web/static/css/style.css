@@ -98,6 +98,29 @@ main {
   padding: 0.65rem 0;
 }
 
+.library-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.library-entry-current {
+  border-color: #7d6337;
+}
+
+.library-entry-badge {
+  flex-shrink: 0;
+  border: 1px solid #7d6337;
+  border-radius: 999px;
+  background: rgba(45, 34, 20, 0.9);
+  color: #f6d9a8;
+  font-size: 0.75rem;
+  letter-spacing: 0.03em;
+  padding: 0.18rem 0.55rem;
+  text-transform: uppercase;
+}
+
 a {
   color: #f4d59f;
 }
@@ -383,5 +406,10 @@ a:hover {
   .btn {
     display: block;
     text-align: center;
+  }
+
+  .library-entry {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

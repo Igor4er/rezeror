@@ -77,6 +77,68 @@ def test_progress_write_requires_owner_login(app):
     assert body["has_saved_progress"] is True
 
 
+def test_progress_read_hides_owner_state_from_non_owner(app):
+    owner_client = app.test_client()
+    payload = {
+        "chapter_path": "arc-1-a-tumultuous-first-day/chapter-1.md",
+        "scroll_y": 120,
+    }
+
+    login = owner_client.post("/owner/login", json={"username": "owner", "password": "secret"})
+    assert login.status_code == 200
+    csrf_token = login.get_json()["csrf_token"]
+
+    saved = owner_client.post("/api/progress", json=payload, headers={"X-CSRF-Token": csrf_token})
+    assert saved.status_code == 200
+
+    anonymous_client = app.test_client()
+    response = anonymous_client.get("/api/progress", query_string={"chapter_path": payload["chapter_path"]})
+
+    assert response.status_code == 200
+    assert response.get_json() == {
+        "chapter_path": payload["chapter_path"],
+        "scroll_y": 0,
+        "has_saved_progress": False,
+    }
+
+
+def test_library_shows_last_read_chapter_only_to_owner(app):
+    client = app.test_client()
+    chapter_path = "arc-1-a-tumultuous-first-day/chapter-1.md"
+    web_app.MANIFEST_PATH.parent.mkdir(parents=True, exist_ok=True)
+    web_app.MANIFEST_PATH.write_text(
+        '{"entries": ['
+        '{"file_path": "arc-1-a-tumultuous-first-day/chapter-1.md", "title": "Chapter 1", "arc": "Arc 1", "phase": "Main"}, '
+        '{"file_path": "arc-1-a-tumultuous-first-day/chapter-2.md", "title": "Chapter 2", "arc": "Arc 1", "phase": "Main"}'
+        ']}' ,
+        encoding="utf-8",
+    )
+
+    login = client.post("/owner/login", json={"username": "owner", "password": "secret"})
+    assert login.status_code == 200
+    csrf_token = login.get_json()["csrf_token"]
+
+    saved = client.post(
+        "/api/progress",
+        json={"chapter_path": chapter_path, "scroll_y": 321},
+        headers={"X-CSRF-Token": csrf_token},
+    )
+    assert saved.status_code == 200
+
+    owner_library = client.get("/library")
+    owner_html = owner_library.get_data(as_text=True)
+    assert owner_library.status_code == 200
+    assert "Continue reading" in owner_html
+    assert "Last read" in owner_html
+    assert "Chapter 1" in owner_html
+
+    anonymous_library = app.test_client().get("/library")
+    anonymous_html = anonymous_library.get_data(as_text=True)
+    assert anonymous_library.status_code == 200
+    assert "Continue reading" not in anonymous_html
+    assert "Last read" not in anonymous_html
+
+
 def test_owner_login_blocks_disallowed_accept_language(app):
     client = app.test_client()
 

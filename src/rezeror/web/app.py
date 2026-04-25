@@ -33,7 +33,13 @@ from rezeror.config import (
     session_secret,
 )
 from rezeror.parser.storage import load_json
-from rezeror.web.progress import get_progress, has_progress, init_progress_db, save_progress
+from rezeror.web.progress import (
+    get_last_read_chapter_path,
+    get_progress,
+    has_progress,
+    init_progress_db,
+    save_progress,
+)
 
 
 MAX_UPLOAD_ARCHIVE_BYTES = 120_000_000
@@ -206,6 +212,12 @@ def _group_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def _owner_logged_in() -> bool:
     return session.get("is_owner") is True
+
+
+def _owner_progress_state(chapter_path: str) -> tuple[int, bool]:
+    if not _owner_logged_in():
+        return 0, False
+    return get_progress(chapter_path), has_progress(chapter_path)
 
 
 def _json_error(message: str, status: int) -> ResponseReturnValue:
@@ -507,7 +519,22 @@ def create_app() -> Flask:
     def library() -> str:
         entries = _load_manifest_entries()
         grouped_entries = _group_entries(entries)
-        return render_template("library.html", entries=entries, grouped_entries=grouped_entries)
+        owner_authenticated = _owner_logged_in()
+        last_read_chapter_path = get_last_read_chapter_path() if owner_authenticated else None
+        last_read_entry = None
+        if last_read_chapter_path:
+            last_read_entry = next(
+                (entry for entry in entries if entry.get("file_path") == last_read_chapter_path),
+                None,
+            )
+        return render_template(
+            "library.html",
+            entries=entries,
+            grouped_entries=grouped_entries,
+            owner_authenticated=owner_authenticated,
+            last_read_chapter_path=last_read_chapter_path,
+            last_read_entry=last_read_entry,
+        )
 
     @app.get("/favicon.ico")
     def favicon() -> Response:
@@ -523,8 +550,7 @@ def create_app() -> Flask:
 
         html, _ = _render_markdown_with_toc(markdown_text)
         prev_entry, next_entry = _adjacent_entries(chapter_path, entries)
-        saved_scroll = get_progress(chapter_path)
-        has_saved_progress = has_progress(chapter_path)
+        saved_scroll, has_saved_progress = _owner_progress_state(chapter_path)
         chapter_display_title = _format_chapter_display_title(metadata, chapter_path)
 
         return render_template(
@@ -649,11 +675,12 @@ def create_app() -> Flask:
             _safe_chapter_abs_path(chapter_path)
         except ValueError:
             return jsonify({"error": "invalid chapter_path"}), 400
+        scroll_y, has_saved_progress = _owner_progress_state(chapter_path)
         return jsonify(
             {
                 "chapter_path": chapter_path,
-                "scroll_y": get_progress(chapter_path),
-                "has_saved_progress": has_progress(chapter_path),
+                "scroll_y": scroll_y,
+                "has_saved_progress": has_saved_progress,
             }
         )
 

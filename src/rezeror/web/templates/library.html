@@ -8,6 +8,16 @@
   <h1>Library</h1>
   <p class="muted">{{ entries|length }} chapters synced.</p>
 
+  {% if owner_authenticated and last_read_chapter_path and last_read_entry %}
+    <section class="progress-panel" aria-label="Owner reading progress">
+      <h2>Continue reading</h2>
+      <p>
+        Last read chapter:
+        <a href="{{ url_for('read_chapter', chapter_path=last_read_chapter_path) }}">{{ last_read_entry.title }}</a>
+      </p>
+    </section>
+  {% endif %}
+
   <section class="notice-panel" aria-label="Site notice">
     <h2>Notice</h2>
     <p>
@@ -34,8 +44,11 @@
           <h3 class="phase-title">{{ phase_group.phase }}</h3>
           <ul class="library-list">
             {% for entry in phase_group.entries %}
-              <li class="library-entry" data-arc="{{ arc_group.arc }}" data-phase="{{ phase_group.phase }}">
+              <li class="library-entry{% if owner_authenticated and entry.file_path == last_read_chapter_path %} library-entry-current{% endif %}" data-arc="{{ arc_group.arc }}" data-phase="{{ phase_group.phase }}">
                 <a href="{{ url_for('read_chapter', chapter_path=entry.file_path) }}">{{ entry.title }}</a>
+                {% if owner_authenticated and entry.file_path == last_read_chapter_path %}
+                  <span class="library-entry-badge">Last read</span>
+                {% endif %}
               </li>
             {% endfor %}
           </ul>
