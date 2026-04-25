@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
@@ -17,6 +18,7 @@ from rezeror.config import (
     ensure_data_dirs,
     owner_auth_enabled,
     owner_credentials,
+    owner_session_days,
     session_secret,
 )
 from rezeror.parser.storage import load_json
@@ -178,6 +180,7 @@ def create_app() -> Flask:
         static_folder="static",
     )
     app.config["SECRET_KEY"] = session_secret()
+    app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=owner_session_days())
 
     @app.get("/")
     @app.get("/library")
@@ -278,6 +281,7 @@ def create_app() -> Flask:
 
         expected_username, expected_password = owner_credentials()
         if username == expected_username and hmac.compare_digest(sha256(expected_password.encode()).digest(), sha256(password.encode()).digest()):
+            session.permanent = True
             session["is_owner"] = True
             return _owner_login_success(next_path)
 

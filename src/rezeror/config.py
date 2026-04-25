@@ -39,6 +39,15 @@ def session_secret() -> str:
     return os.getenv("REZEROR_SESSION_SECRET", "rezeror-dev-session-secret")
 
 
+def owner_session_days() -> int:
+    raw = os.getenv("REZEROR_OWNER_SESSION_DAYS", "3650")
+    try:
+        days = int(raw)
+    except (TypeError, ValueError):
+        return 3650
+    return max(1, days)
+
+
 def ensure_data_dirs() -> None:
     CHAPTERS_DIR.mkdir(parents=True, exist_ok=True)
     STATE_DIR.mkdir(parents=True, exist_ok=True)

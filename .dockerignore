@@ -1,0 +1,27 @@
+# VCS
+.git
+.gitignore
+
+# Python cache/artifacts
+__pycache__/
+*.py[cod]
+*.so
+.pytest_cache/
+.mypy_cache/
+.coverage
+
+# Local environments
+.venv/
+.env
+.env.*
+
+# Project data (large/generated)
+data/
+
+# Development/docs
+tests/
+plan.md
+
+# Editor/OS
+.vscode/
+.DS_Store

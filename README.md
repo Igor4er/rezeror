@@ -67,6 +67,29 @@ Run web app:
 uv run rezeror serve --host 127.0.0.1 --port 5000
 ```
 
+## Docker
+
+Build image:
+
+```bash
+docker build -t rezeror:latest .
+```
+
+Run container:
+
+```bash
+docker run --rm -p 8080:8080 \
+	-e REZEROR_DATA_DIR=/data \
+	-e REZEROR_DB_PATH=/data/progress.sqlite3 \
+	-e REZEROR_OWNER_USERNAME=owner \
+	-e REZEROR_OWNER_PASSWORD='change-me' \
+	-e REZEROR_SESSION_SECRET='change-this' \
+	-v rezeror_data:/data \
+	rezeror:latest
+```
+
+The container runs as a non-root user and serves via Gunicorn on `0.0.0.0:8080`.
+
 ## Environment Variables
 
 You can override storage locations and owner auth with env vars:
@@ -76,6 +99,7 @@ You can override storage locations and owner auth with env vars:
 - `REZEROR_OWNER_USERNAME`: owner login username (default: `owner`)
 - `REZEROR_OWNER_PASSWORD`: owner login password (required to enable owner-only writes)
 - `REZEROR_SESSION_SECRET`: Flask session signing secret (set this in production)
+- `REZEROR_OWNER_SESSION_DAYS`: owner login session lifetime in days (default: `3650`)
 
 The app creates missing folders automatically for chapters/state and for the progress DB parent directory.
 
@@ -87,6 +111,7 @@ export REZEROR_DB_PATH=/app/state/progress.sqlite3
 export REZEROR_OWNER_USERNAME=ihor
 export REZEROR_OWNER_PASSWORD='strong-password'
 export REZEROR_SESSION_SECRET='long-random-secret'
+export REZEROR_OWNER_SESSION_DAYS=3650
 ```
 
 ## Owner-Protected API Routes
