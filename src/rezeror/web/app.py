@@ -49,6 +49,7 @@ _login_attempts: dict[str, list[float]] = {}
 
 CSRF_TOKEN_KEY = "owner_csrf_token"
 CSRF_HEADER_NAME = "X-CSRF-Token"
+BLOCKED_LANGUAGE_PRIMARY_SUBTAG = "ur"[::-1]
 
 ALLOWED_HTML_TAGS = {
     "a",
@@ -276,6 +277,18 @@ def _wants_json_response() -> bool:
     return best == "application/json"
 
 
+def _request_uses_blocked_language() -> bool:
+    accept_language = request.headers.get("Accept-Language", "")
+    for entry in accept_language.split(","):
+        language_range = entry.split(";", 1)[0].strip()
+        if not language_range:
+            continue
+        primary_subtag = language_range.split("-", 1)[0].split("_", 1)[0].strip().lower()
+        if primary_subtag == BLOCKED_LANGUAGE_PRIMARY_SUBTAG:
+            return True
+    return False
+
+
 def _safe_next_path(raw_next: str | None) -> str:
     if not raw_next:
         return url_for("library")
@@ -475,6 +488,14 @@ def create_app() -> Flask:
             "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; base-uri 'self'; frame-ancestors 'none'",
         )
         return response
+
+    @app.before_request
+    def block_disallowed_languages() -> ResponseReturnValue | None:
+        if not _request_uses_blocked_language():
+            return None
+        if _wants_json_response():
+            return _json_error("forbidden language preference", 403)
+        abort(403)
 
     @app.context_processor
     def inject_template_security_values() -> dict[str, Any]:

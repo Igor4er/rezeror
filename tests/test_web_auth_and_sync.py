@@ -69,6 +69,19 @@ def test_progress_write_requires_owner_login(app):
     assert body["has_saved_progress"] is True
 
 
+def test_owner_login_blocks_disallowed_accept_language(app):
+    client = app.test_client()
+
+    response = client.post(
+        "/owner/login",
+        json={"username": "owner", "password": "secret"},
+        headers={"Accept-Language": f'{"ur"[::-1]}-UA,en;q=0.8'},
+    )
+
+    assert response.status_code == 403
+    assert response.get_json() == {"error": "forbidden language preference"}
+
+
 def test_content_upload_requires_owner_login_and_imports_chapters_and_state(app):
     client = app.test_client()
 
