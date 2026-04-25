@@ -7,6 +7,7 @@
   --accent: #dbb36b;
   --border: #2b2b2b;
   --reader-content-width: 760px;
+  --reader-font-size: 19px;
 }
 
 * {
@@ -140,6 +141,7 @@ a:hover {
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 1.25rem 1.2rem;
+  font-size: var(--reader-font-size);
 }
 
 .reader-content img {
@@ -267,6 +269,12 @@ a:hover {
   -webkit-user-select: none;
 }
 
+.reader-font-control {
+  margin: 0.9rem 0 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 .ruler-track {
   position: relative;
   height: 22px;
@@ -344,6 +352,77 @@ a:hover {
 .reader-width-value {
   color: var(--muted);
   font-size: 0.78rem;
+}
+
+.font-track {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.8rem;
+  min-height: 34px;
+}
+
+.font-track::before {
+  content: '';
+  position: absolute;
+  left: calc(1.15rem + 0.8rem);
+  right: calc(1.65rem + 0.8rem);
+  top: 50%;
+  height: 12px;
+  transform: translateY(-50%);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(219, 179, 107, 0.08), rgba(219, 179, 107, 0.2));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.font-track-glyph {
+  position: relative;
+  z-index: 1;
+  color: #e7d0a6;
+  line-height: 1;
+}
+
+.font-track-glyph-small {
+  font-size: 1.15rem;
+}
+
+.font-track-glyph-large {
+  font-size: 1.65rem;
+}
+
+.font-track-fill {
+  position: absolute;
+  left: calc(1.15rem + 0.8rem);
+  top: 50%;
+  height: 12px;
+  width: 0;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(219, 179, 107, 0.24), rgba(245, 220, 170, 0.55));
+  pointer-events: none;
+}
+
+.font-handle {
+  position: absolute;
+  top: 50%;
+  left: calc(1.15rem + 0.8rem);
+  width: 18px;
+  height: 18px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 1px solid rgba(255, 235, 200, 0.65);
+  background: radial-gradient(circle at 35% 35%, #fff4df, #dbb36b 58%, #8d6934 100%);
+  box-shadow: 0 0 0 4px rgba(219, 179, 107, 0.16), 0 8px 18px rgba(0, 0, 0, 0.35);
+  cursor: ew-resize;
+  z-index: 2;
+  touch-action: none;
+}
+
+.font-handle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(219, 179, 107, 0.24), 0 0 0 2px rgba(255, 241, 212, 0.75), 0 8px 18px rgba(0, 0, 0, 0.35);
 }
 
 .library-groups {

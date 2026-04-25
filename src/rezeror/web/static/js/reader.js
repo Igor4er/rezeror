@@ -116,11 +116,20 @@
   const leftHandle = document.querySelector('[data-ruler-handle="left"]');
   const rightHandle = document.querySelector('[data-ruler-handle="right"]');
   const widthValue = document.querySelector("[data-reader-width-value]");
+  const fontTrack = document.querySelector("[data-font-track]");
+  const fontFill = document.querySelector("[data-font-fill]");
+  const fontHandle = document.querySelector("[data-font-handle]");
+  const fontValue = document.querySelector("[data-reader-font-value]");
   const widthStorageKey = "rezeror:reader-width";
+  const fontStorageKey = "rezeror:reader-font-size";
   const minWidth = 620;
   const maxWidth = 1100;
   const widthStep = 20;
+  const minFontSize = 16;
+  const maxFontSize = 28;
+  const fontStep = 1;
   let currentWidth = 760;
+  let currentFontSize = 19;
 
   const updateRulerUI = () => {
     if (!rulerTrack) {
@@ -165,10 +174,66 @@
     }
   };
 
+  const updateFontUI = () => {
+    if (!fontTrack || !fontHandle) {
+      return;
+    }
+
+    const trackRect = fontTrack.getBoundingClientRect();
+    const glyphs = fontTrack.querySelectorAll(".font-track-glyph");
+    if (trackRect.width === 0 || glyphs.length < 2) {
+      return;
+    }
+
+    const start = glyphs[0].getBoundingClientRect().right - trackRect.left + 12;
+    const end = glyphs[1].getBoundingClientRect().left - trackRect.left - 12;
+    const usableWidth = Math.max(1, end - start);
+    const progress = (currentFontSize - minFontSize) / (maxFontSize - minFontSize);
+    const handleLeft = start + usableWidth * progress;
+
+    fontHandle.style.left = `${handleLeft}px`;
+    fontHandle.setAttribute("aria-valuenow", String(currentFontSize));
+    fontHandle.setAttribute("aria-valuetext", `${currentFontSize} pixels`);
+
+    if (fontFill) {
+      fontFill.style.left = `${start}px`;
+      fontFill.style.width = `${handleLeft - start}px`;
+    }
+
+    if (fontValue) {
+      fontValue.textContent = `${currentFontSize}px`;
+    }
+  };
+
+  const applyReaderFontSize = (rawValue, save) => {
+    const numeric = Number(rawValue);
+    if (!Number.isFinite(numeric)) {
+      return;
+    }
+
+    currentFontSize = Math.min(
+      maxFontSize,
+      Math.max(minFontSize, Math.round(numeric / fontStep) * fontStep)
+    );
+    document.documentElement.style.setProperty("--reader-font-size", `${currentFontSize}px`);
+    updateFontUI();
+    if (save) {
+      try {
+        window.localStorage.setItem(fontStorageKey, String(currentFontSize));
+      } catch (_) {}
+    }
+  };
+
   try {
     applyReaderWidth(window.localStorage.getItem(widthStorageKey) || 760, false);
   } catch (_) {
     applyReaderWidth(760, false);
+  }
+
+  try {
+    applyReaderFontSize(window.localStorage.getItem(fontStorageKey) || 19, false);
+  } catch (_) {
+    applyReaderFontSize(19, false);
   }
 
   const makeHandleDraggable = (handle, side) => {
@@ -217,6 +282,71 @@
 
   makeHandleDraggable(leftHandle, "left");
   makeHandleDraggable(rightHandle, "right");
+
+  if (fontTrack && fontHandle) {
+    const positionToFontSize = (clientX) => {
+      const rect = fontTrack.getBoundingClientRect();
+      const glyphs = fontTrack.querySelectorAll(".font-track-glyph");
+      if (rect.width === 0 || glyphs.length < 2) {
+        return;
+      }
+
+      const start = glyphs[0].getBoundingClientRect().right - rect.left + 12;
+      const end = glyphs[1].getBoundingClientRect().left - rect.left - 12;
+      const usableWidth = Math.max(1, end - start);
+      const clampedX = Math.min(end, Math.max(start, clientX - rect.left));
+      const progress = (clampedX - start) / usableWidth;
+      const fontSize = minFontSize + progress * (maxFontSize - minFontSize);
+      applyReaderFontSize(fontSize, true);
+    };
+
+    const onMouseMove = (e) => positionToFontSize(e.clientX);
+    const onMouseUp = () => {
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+    };
+    fontHandle.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
+    });
+
+    const onTouchMove = (e) => {
+      e.preventDefault();
+      positionToFontSize(e.touches[0].clientX);
+    };
+    const onTouchEnd = () => {
+      document.removeEventListener("touchmove", onTouchMove);
+      document.removeEventListener("touchend", onTouchEnd);
+    };
+    fontHandle.addEventListener("touchstart", (e) => {
+      e.preventDefault();
+      document.addEventListener("touchmove", onTouchMove, { passive: false });
+      document.addEventListener("touchend", onTouchEnd);
+    });
+
+    fontTrack.addEventListener("mousedown", (e) => {
+      positionToFontSize(e.clientX);
+    });
+
+    fontHandle.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowRight") {
+        applyReaderFontSize(currentFontSize + fontStep, true);
+        e.preventDefault();
+      } else if (e.key === "ArrowLeft") {
+        applyReaderFontSize(currentFontSize - fontStep, true);
+        e.preventDefault();
+      } else if (e.key === "Home") {
+        applyReaderFontSize(minFontSize, true);
+        e.preventDefault();
+      } else if (e.key === "End") {
+        applyReaderFontSize(maxFontSize, true);
+        e.preventDefault();
+      }
+    });
+
+    new ResizeObserver(updateFontUI).observe(fontTrack);
+  }
 
   if (rulerTrack) {
     new ResizeObserver(updateRulerUI).observe(rulerTrack);

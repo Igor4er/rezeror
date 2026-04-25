@@ -39,6 +39,18 @@
     </div>
   </div>
 
+  <div class="reader-font-control" aria-label="Adjust text size">
+    <div class="font-track" data-font-track>
+      <span class="font-track-glyph font-track-glyph-small" aria-hidden="true">A</span>
+      <div class="font-track-fill" data-font-fill></div>
+      <div class="font-handle" data-font-handle tabindex="0" role="slider" aria-label="Reader font size" aria-valuemin="16" aria-valuemax="28" aria-valuenow="19" aria-valuetext="19 pixels"></div>
+      <span class="font-track-glyph font-track-glyph-large" aria-hidden="true">A</span>
+    </div>
+    <div class="ruler-footer">
+      <span class="reader-width-value" data-reader-font-value>19px</span>
+    </div>
+  </div>
+
   <article class="reader-content prose">
     <h1>{{ metadata.title or metadata.chapter or chapter_path }}</h1>
     {% if metadata.arc %}
