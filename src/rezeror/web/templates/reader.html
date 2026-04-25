@@ -18,7 +18,20 @@
       {% endif %}
     </div>
     <div class="nav-center">
-      <a class="btn" href="{{ url_for('chapter_toc', chapter_path=chapter_path) }}">Contents</a>
+      <div class="reader-metrics" aria-label="Current reader settings">
+        <span class="reader-metric">
+          <span class="reader-metric-icon" aria-hidden="true">Aa</span>
+          <span class="reader-width-value" data-reader-font-value>18px</span>
+        </span>
+        <span class="reader-metric">
+          <span class="reader-metric-icon" aria-hidden="true">Ct</span>
+          <span class="reader-width-value" data-reader-contrast-value>100%</span>
+        </span>
+        <span class="reader-metric">
+          <span class="reader-metric-icon" aria-hidden="true">&lt;&gt;</span>
+          <span class="reader-width-value" data-reader-width-value>760px</span>
+        </span>
+      </div>
     </div>
     <div class="nav-right">
       {% if next_entry %}
@@ -56,21 +69,6 @@
     </div>
   </div>
 
-  <div class="reader-metrics" aria-label="Current reader settings">
-    <span class="reader-metric">
-      <span class="reader-metric-icon" aria-hidden="true">Aa</span>
-      <span class="reader-width-value" data-reader-font-value>18px</span>
-    </span>
-    <span class="reader-metric">
-      <span class="reader-metric-icon" aria-hidden="true">Ct</span>
-      <span class="reader-width-value" data-reader-contrast-value>100%</span>
-    </span>
-    <span class="reader-metric">
-      <span class="reader-metric-icon" aria-hidden="true">&lt;&gt;</span>
-      <span class="reader-width-value" data-reader-width-value>760px</span>
-    </span>
-  </div>
-
   <article class="reader-content prose">
     <h1>{{ metadata.title or metadata.chapter or chapter_path }}</h1>
     {% if metadata.arc %}
@@ -85,9 +83,7 @@
         <a class="btn" href="{{ url_for('read_chapter', chapter_path=prev_entry.file_path) }}">Previous</a>
       {% endif %}
     </div>
-    <div class="nav-center">
-      <a class="btn" href="{{ url_for('chapter_toc', chapter_path=chapter_path) }}">Contents</a>
-    </div>
+    <div class="nav-center" aria-hidden="true"></div>
     <div class="nav-right">
       {% if next_entry %}
         <a class="btn" href="{{ url_for('read_chapter', chapter_path=next_entry.file_path) }}">Next</a>
