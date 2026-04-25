@@ -566,58 +566,6 @@ def create_app() -> Flask:
             owner_authenticated=_owner_logged_in(),
         )
 
-    @app.get("/read/<path:chapter_path>/toc")
-    def chapter_toc(chapter_path: str) -> str:
-        entries = _load_manifest_entries()
-        try:
-            metadata, markdown_text = _read_markdown_with_front_matter(chapter_path)
-        except (FileNotFoundError, ValueError):
-            abort(404)
-
-        _, toc_items = _render_markdown_with_toc(markdown_text)
-        prev_entry, next_entry = _adjacent_entries(chapter_path, entries)
-
-        current_index = next((i for i, item in enumerate(entries) if item.get("file_path") == chapter_path), None)
-        progress_info: dict[str, Any] | None = None
-        if current_index is not None and entries:
-            current_entry = entries[current_index]
-            arc_name = current_entry.get("arc")
-            phase_name = current_entry.get("phase")
-
-            arc_entries = [item for item in entries if item.get("arc") == arc_name]
-            phase_entries = [
-                item
-                for item in entries
-                if item.get("arc") == arc_name and item.get("phase") == phase_name
-            ]
-
-            arc_index = next((i for i, item in enumerate(arc_entries) if item.get("file_path") == chapter_path), None)
-            phase_index = next((i for i, item in enumerate(phase_entries) if item.get("file_path") == chapter_path), None)
-
-            overall_position = current_index + 1
-            overall_total = len(entries)
-            progress_info = {
-                "overall_position": overall_position,
-                "overall_total": overall_total,
-                "overall_percent": round((overall_position / overall_total) * 100) if overall_total else 0,
-                "arc": arc_name,
-                "arc_position": (arc_index + 1) if arc_index is not None else None,
-                "arc_total": len(arc_entries),
-                "phase": phase_name,
-                "phase_position": (phase_index + 1) if phase_index is not None else None,
-                "phase_total": len(phase_entries),
-            }
-
-        return render_template(
-            "chapter_toc.html",
-            chapter_path=chapter_path,
-            metadata=metadata,
-            toc_items=toc_items,
-            prev_entry=prev_entry,
-            next_entry=next_entry,
-            progress_info=progress_info,
-        )
-
     @app.get("/owner/login")
     def owner_login_form() -> ResponseReturnValue:
         next_path = _safe_next_path(request.args.get("next"))
