@@ -111,47 +111,115 @@
   const { notes: translatorNotes, definitionElements } = collectTranslatorNotes(readerContent);
   replaceInlineTranslatorRefs(readerContent, translatorNotes, definitionElements);
 
-  const widthSlider = document.querySelector("[data-reader-width-slider]");
+  const rulerTrack = document.querySelector("[data-ruler-track]");
+  const rulerZone = document.querySelector("[data-ruler-zone]");
+  const leftHandle = document.querySelector('[data-ruler-handle="left"]');
+  const rightHandle = document.querySelector('[data-ruler-handle="right"]');
   const widthValue = document.querySelector("[data-reader-width-value]");
   const widthStorageKey = "rezeror:reader-width";
   const minWidth = 620;
   const maxWidth = 1100;
+  const widthStep = 20;
+  let currentWidth = 760;
 
-  const applyReaderWidth = (rawValue) => {
+  const updateRulerUI = () => {
+    if (!rulerTrack) {
+      return;
+    }
+    const trackWidth = rulerTrack.getBoundingClientRect().width;
+    if (trackWidth === 0) {
+      return;
+    }
+    const margin = Math.max(0, (trackWidth - currentWidth) / 2);
+    const leftPct = (margin / trackWidth) * 100;
+    const rightPct = ((trackWidth - margin) / trackWidth) * 100;
+    if (leftHandle) {
+      leftHandle.style.left = `${leftPct}%`;
+      leftHandle.setAttribute("aria-valuenow", String(currentWidth));
+    }
+    if (rightHandle) {
+      rightHandle.style.left = `${rightPct}%`;
+      rightHandle.setAttribute("aria-valuenow", String(currentWidth));
+    }
+    if (rulerZone) {
+      rulerZone.style.left = `${leftPct}%`;
+      rulerZone.style.width = `${rightPct - leftPct}%`;
+    }
+    if (widthValue) {
+      widthValue.textContent = `${currentWidth}px`;
+    }
+  };
+
+  const applyReaderWidth = (rawValue, save) => {
     const numeric = Number(rawValue);
     if (!Number.isFinite(numeric)) {
       return;
     }
-    const bounded = Math.min(maxWidth, Math.max(minWidth, Math.round(numeric)));
-    document.documentElement.style.setProperty("--reader-content-width", `${bounded}px`);
-    if (widthSlider) {
-      widthSlider.value = String(bounded);
-    }
-    if (widthValue) {
-      widthValue.textContent = `${bounded}px`;
+    currentWidth = Math.min(maxWidth, Math.max(minWidth, Math.round(numeric / widthStep) * widthStep));
+    document.documentElement.style.setProperty("--reader-content-width", `${currentWidth}px`);
+    updateRulerUI();
+    if (save) {
+      try {
+        window.localStorage.setItem(widthStorageKey, String(currentWidth));
+      } catch (_) {}
     }
   };
 
   try {
-    const savedWidth = window.localStorage.getItem(widthStorageKey);
-    if (savedWidth) {
-      applyReaderWidth(savedWidth);
-    } else if (widthSlider) {
-      applyReaderWidth(widthSlider.value);
-    }
+    applyReaderWidth(window.localStorage.getItem(widthStorageKey) || 760, false);
   } catch (_) {
-    if (widthSlider) {
-      applyReaderWidth(widthSlider.value);
-    }
+    applyReaderWidth(760, false);
   }
 
-  if (widthSlider) {
-    widthSlider.addEventListener("input", () => {
-      applyReaderWidth(widthSlider.value);
-      try {
-        window.localStorage.setItem(widthStorageKey, widthSlider.value);
-      } catch (_) {}
+  const makeHandleDraggable = (handle, side) => {
+    if (!handle || !rulerTrack) {
+      return;
+    }
+    const onMove = (clientX) => {
+      const rect = rulerTrack.getBoundingClientRect();
+      const relX = clientX - rect.left;
+      const margin = side === "left" ? relX : rect.width - relX;
+      applyReaderWidth(rect.width - 2 * margin, true);
+    };
+    const onMouseMove = (e) => onMove(e.clientX);
+    const onMouseUp = () => {
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+    };
+    handle.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
     });
+    const onTouchMove = (e) => {
+      e.preventDefault();
+      onMove(e.touches[0].clientX);
+    };
+    const onTouchEnd = () => {
+      document.removeEventListener("touchmove", onTouchMove);
+      document.removeEventListener("touchend", onTouchEnd);
+    };
+    handle.addEventListener("touchstart", (e) => {
+      e.preventDefault();
+      document.addEventListener("touchmove", onTouchMove, { passive: false });
+      document.addEventListener("touchend", onTouchEnd);
+    });
+    handle.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowRight") {
+        applyReaderWidth(currentWidth + widthStep, true);
+        e.preventDefault();
+      } else if (e.key === "ArrowLeft") {
+        applyReaderWidth(currentWidth - widthStep, true);
+        e.preventDefault();
+      }
+    });
+  };
+
+  makeHandleDraggable(leftHandle, "left");
+  makeHandleDraggable(rightHandle, "right");
+
+  if (rulerTrack) {
+    new ResizeObserver(updateRulerUI).observe(rulerTrack);
   }
 
   const chapterPath = root.getAttribute("data-chapter-path");

@@ -261,26 +261,89 @@ a:hover {
   background: #2a2118;
 }
 
-.reader-controls {
-  max-width: var(--reader-content-width);
-  margin: 0.8rem auto 0;
-  padding: 0.7rem 0.9rem;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: rgba(18, 18, 18, 0.72);
-  display: flex;
-  align-items: center;
-  gap: 0.8rem;
+.reader-ruler {
+  margin: 0.75rem 0 0;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
-.reader-controls input[type="range"] {
-  flex: 1;
+.ruler-track {
+  position: relative;
+  height: 22px;
+  background: rgba(8, 6, 4, 0.7);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: visible;
+  cursor: default;
+  background-image: repeating-linear-gradient(
+    to right,
+    rgba(255, 255, 255, 0.04) 0,
+    rgba(255, 255, 255, 0.04) 1px,
+    transparent 1px,
+    transparent 80px
+  );
+}
+
+.ruler-text-zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(219, 179, 107, 0.07);
+  border-left: 1px solid rgba(219, 179, 107, 0.25);
+  border-right: 1px solid rgba(219, 179, 107, 0.25);
+  pointer-events: none;
+}
+
+.ruler-handle {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 3px;
+  transform: translateX(-50%);
+  background: var(--accent);
+  border-radius: 2px;
+  cursor: ew-resize;
+  z-index: 10;
+  touch-action: none;
+}
+
+/* Wider invisible hit area */
+.ruler-handle::before {
+  content: '';
+  position: absolute;
+  inset: 0 -10px;
+  cursor: ew-resize;
+}
+
+/* Downward-pointing triangle tab */
+.ruler-handle::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 3px);
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 7px solid var(--accent);
+}
+
+.ruler-handle:focus-visible {
+  outline: none;
+  background: #e9c482;
+  box-shadow: 0 0 0 2px rgba(219, 179, 107, 0.4);
+}
+
+.ruler-footer {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.75rem;
 }
 
 .reader-width-value {
   color: var(--muted);
-  min-width: 4.5rem;
-  text-align: right;
+  font-size: 0.78rem;
 }
 
 .library-groups {

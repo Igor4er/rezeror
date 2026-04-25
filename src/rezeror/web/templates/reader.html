@@ -28,18 +28,16 @@
   </nav>
 
   <section class="reader-controls" aria-label="Reader options">
-    <label for="reader-width-slider">Text width</label>
-    <input
-      id="reader-width-slider"
-      type="range"
-      min="620"
-      max="1100"
-      step="20"
-      value="760"
-      data-reader-width-slider
-    >
-    <span class="reader-width-value" data-reader-width-value>760px</span>
-  </section>
+  <div class="reader-ruler" data-reader-ruler aria-label="Adjust text width">
+    <div class="ruler-track" data-ruler-track>
+      <div class="ruler-text-zone" data-ruler-zone></div>
+      <div class="ruler-handle ruler-handle-left" data-ruler-handle="left" tabindex="0" role="slider" aria-label="Left text boundary" aria-valuemin="620" aria-valuemax="1100" aria-valuenow="760"></div>
+      <div class="ruler-handle ruler-handle-right" data-ruler-handle="right" tabindex="0" role="slider" aria-label="Right text boundary" aria-valuemin="620" aria-valuemax="1100" aria-valuenow="760"></div>
+    </div>
+    <div class="ruler-footer">
+      <span class="reader-width-value" data-reader-width-value>760px</span>
+    </div>
+  </div>
 
   <article class="reader-content prose">
     <h1>{{ metadata.title or metadata.chapter or chapter_path }}</h1>
