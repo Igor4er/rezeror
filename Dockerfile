@@ -16,8 +16,11 @@ RUN uv pip install --python /app/.venv/bin/python --no-cache-dir gunicorn==23.0.
 
 FROM python:3.14-slim-bookworm AS runtime
 
-RUN groupadd --system app \
-    && useradd --system --gid app --create-home --home-dir /home/app app \
+ARG APP_UID=1000
+ARG APP_GID=1000
+
+RUN groupadd --gid ${APP_GID} app \
+    && useradd --uid ${APP_UID} --gid ${APP_GID} --create-home --home-dir /home/app app \
     && mkdir -p /data /app \
     && chown -R app:app /data /app /home/app
 

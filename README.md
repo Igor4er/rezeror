@@ -90,6 +90,20 @@ docker run --rm -p 8080:8080 \
 
 The container runs as a non-root user and serves via Gunicorn on `0.0.0.0:8080`.
 
+Railway note:
+
+- If you mount a persistent volume and see `PermissionError: [Errno 13]` for paths under `/data`, it is usually a UID/GID mismatch between the container user and the mounted volume owner.
+- This image runs as UID/GID `1000` by default (Railway-friendly).
+- If your volume uses different ownership, rebuild with:
+
+```bash
+docker build --build-arg APP_UID=1000 --build-arg APP_GID=1000 -t rezeror:latest .
+```
+
+- Then set env vars consistently, for example:
+	- `REZEROR_DATA_DIR=/data/c`
+	- `REZEROR_DB_PATH=/data/progress.sqlite3`
+
 ## Environment Variables
 
 You can override storage locations and owner auth with env vars:
