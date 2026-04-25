@@ -117,6 +117,7 @@
   const rightHandle = document.querySelector('[data-ruler-handle="right"]');
   const widthValue = document.querySelector("[data-reader-width-value]");
   const fontTrack = document.querySelector("[data-font-track]");
+  const fontRail = document.querySelector("[data-font-rail]");
   const fontFill = document.querySelector("[data-font-fill]");
   const fontHandle = document.querySelector("[data-font-handle]");
   const fontValue = document.querySelector("[data-reader-font-value]");
@@ -175,29 +176,24 @@
   };
 
   const updateFontUI = () => {
-    if (!fontTrack || !fontHandle) {
+    if (!fontRail || !fontHandle) {
       return;
     }
 
-    const trackRect = fontTrack.getBoundingClientRect();
-    const glyphs = fontTrack.querySelectorAll(".font-track-glyph");
-    if (trackRect.width === 0 || glyphs.length < 2) {
+    const railRect = fontRail.getBoundingClientRect();
+    if (railRect.width === 0) {
       return;
     }
 
-    const start = glyphs[0].getBoundingClientRect().right - trackRect.left + 12;
-    const end = glyphs[1].getBoundingClientRect().left - trackRect.left - 12;
-    const usableWidth = Math.max(1, end - start);
     const progress = (currentFontSize - minFontSize) / (maxFontSize - minFontSize);
-    const handleLeft = start + usableWidth * progress;
+    const handleLeft = railRect.width * progress;
 
     fontHandle.style.left = `${handleLeft}px`;
     fontHandle.setAttribute("aria-valuenow", String(currentFontSize));
     fontHandle.setAttribute("aria-valuetext", `${currentFontSize} pixels`);
 
     if (fontFill) {
-      fontFill.style.left = `${start}px`;
-      fontFill.style.width = `${handleLeft - start}px`;
+      fontFill.style.width = `${handleLeft}px`;
     }
 
     if (fontValue) {
@@ -283,19 +279,15 @@
   makeHandleDraggable(leftHandle, "left");
   makeHandleDraggable(rightHandle, "right");
 
-  if (fontTrack && fontHandle) {
+  if (fontRail && fontHandle) {
     const positionToFontSize = (clientX) => {
-      const rect = fontTrack.getBoundingClientRect();
-      const glyphs = fontTrack.querySelectorAll(".font-track-glyph");
-      if (rect.width === 0 || glyphs.length < 2) {
+      const rect = fontRail.getBoundingClientRect();
+      if (rect.width === 0) {
         return;
       }
 
-      const start = glyphs[0].getBoundingClientRect().right - rect.left + 12;
-      const end = glyphs[1].getBoundingClientRect().left - rect.left - 12;
-      const usableWidth = Math.max(1, end - start);
-      const clampedX = Math.min(end, Math.max(start, clientX - rect.left));
-      const progress = (clampedX - start) / usableWidth;
+      const clampedX = Math.min(rect.width, Math.max(0, clientX - rect.left));
+      const progress = clampedX / rect.width;
       const fontSize = minFontSize + progress * (maxFontSize - minFontSize);
       applyReaderFontSize(fontSize, true);
     };
@@ -325,7 +317,7 @@
       document.addEventListener("touchend", onTouchEnd);
     });
 
-    fontTrack.addEventListener("mousedown", (e) => {
+    fontRail.addEventListener("mousedown", (e) => {
       positionToFontSize(e.clientX);
     });
 
@@ -345,7 +337,7 @@
       }
     });
 
-    new ResizeObserver(updateFontUI).observe(fontTrack);
+    new ResizeObserver(updateFontUI).observe(fontRail);
   }
 
   if (rulerTrack) {

@@ -355,7 +355,6 @@ a:hover {
 }
 
 .font-track {
-  position: relative;
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
@@ -363,14 +362,9 @@ a:hover {
   min-height: 34px;
 }
 
-.font-track::before {
-  content: '';
-  position: absolute;
-  left: calc(1.15rem + 0.8rem);
-  right: calc(1.65rem + 0.8rem);
-  top: 50%;
+.font-rail {
+  position: relative;
   height: 12px;
-  transform: translateY(-50%);
   border: 1px solid var(--border);
   border-radius: 999px;
   background: linear-gradient(90deg, rgba(219, 179, 107, 0.08), rgba(219, 179, 107, 0.2));
@@ -394,11 +388,10 @@ a:hover {
 
 .font-track-fill {
   position: absolute;
-  left: calc(1.15rem + 0.8rem);
-  top: 50%;
-  height: 12px;
+  left: 0;
+  top: -1px;
+  bottom: -1px;
   width: 0;
-  transform: translateY(-50%);
   border-radius: 999px;
   background: linear-gradient(90deg, rgba(219, 179, 107, 0.24), rgba(245, 220, 170, 0.55));
   pointer-events: none;
@@ -407,7 +400,7 @@ a:hover {
 .font-handle {
   position: absolute;
   top: 50%;
-  left: calc(1.15rem + 0.8rem);
+  left: 0;
   width: 18px;
   height: 18px;
   transform: translate(-50%, -50%);
