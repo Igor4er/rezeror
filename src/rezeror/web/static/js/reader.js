@@ -136,7 +136,7 @@
   const fontStep = 0.5;
   const minContrast = 70;
   const maxContrast = 115;
-  const contrastStep = 5;
+  const contrastStep = 1;
   let currentWidth = 760;
   let currentFontSize = 18;
   let currentContrast = 100;
