@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 from pathlib import Path
+import re
 import zipfile
 
 import pytest
@@ -36,10 +37,17 @@ def app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("REZEROR_OWNER_USERNAME", "owner")
     monkeypatch.setenv("REZEROR_OWNER_PASSWORD", "secret")
     monkeypatch.setenv("REZEROR_SESSION_SECRET", "test-secret-with-at-least-32-characters")
+    web_app._login_attempts.clear()
 
     flask_app = web_app.create_app()
     flask_app.config.update(TESTING=True)
     return flask_app
+
+
+def _extract_form_csrf_token(response_text: str) -> str:
+    match = re.search(r'name="csrf_token" value="([^"]+)"', response_text)
+    assert match is not None
+    return match.group(1)
 
 
 def test_progress_write_requires_owner_login(app):
@@ -80,6 +88,46 @@ def test_owner_login_blocks_disallowed_accept_language(app):
 
     assert response.status_code == 403
     assert response.get_json() == {"error": "forbidden language preference"}
+
+
+def test_owner_form_login_sanitizes_external_next_redirect(app):
+    client = app.test_client()
+
+    form_page = client.get("/owner/login", query_string={"next": "https://evil.example/steal"})
+    assert form_page.status_code == 200
+
+    csrf_token = _extract_form_csrf_token(form_page.get_data(as_text=True))
+    response = client.post(
+        "/owner/login",
+        data={
+            "username": "owner",
+            "password": "secret",
+            "next": "https://evil.example/steal",
+            "csrf_token": csrf_token,
+        },
+    )
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/library")
+
+
+def test_owner_login_rate_limit_resets_after_success(app):
+    client = app.test_client()
+
+    for _ in range(web_app.LOGIN_MAX_ATTEMPTS - 1):
+        failed = client.post("/owner/login", json={"username": "owner", "password": "wrong"})
+        assert failed.status_code == 403
+
+    success = client.post("/owner/login", json={"username": "owner", "password": "secret"})
+    assert success.status_code == 200
+
+    for _ in range(web_app.LOGIN_MAX_ATTEMPTS):
+        failed = client.post("/owner/login", json={"username": "owner", "password": "wrong"})
+        assert failed.status_code == 403
+
+    blocked = client.post("/owner/login", json={"username": "owner", "password": "wrong"})
+    assert blocked.status_code == 429
+    assert blocked.get_json() == {"error": "too many attempts, try again later"}
 
 
 def test_content_upload_requires_owner_login_and_imports_chapters_and_state(app):
@@ -142,6 +190,28 @@ def test_content_upload_rejects_invalid_manifest_payload(app):
     )
     assert response.status_code == 400
     assert "invalid JSON" in response.get_json()["error"]
+
+
+def test_content_upload_rejects_invalid_progress_database(app):
+    client = app.test_client()
+    login = client.post("/owner/login", json={"username": "owner", "password": "secret"})
+    assert login.status_code == 200
+    csrf_token = login.get_json()["csrf_token"]
+
+    archive = io.BytesIO()
+    with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("progress.sqlite3", b"not-a-sqlite-file")
+    archive.seek(0)
+
+    response = client.post(
+        "/api/content/upload",
+        data={"archive": (archive, "content.zip")},
+        headers={"X-CSRF-Token": csrf_token},
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "progress.sqlite3 is not a valid sqlite3 file"}
 
 
 def test_owner_logout_requires_csrf(app):
