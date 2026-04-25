@@ -158,6 +158,8 @@
   const initialScroll = Number(root.getAttribute("data-saved-scroll") || "0");
   const rawHasSavedProgress = (root.getAttribute("data-has-saved-progress") || "").toLowerCase();
   const hasSavedProgress = rawHasSavedProgress === "1" || rawHasSavedProgress === "true";
+  const rawOwnerAuthenticated = (root.getAttribute("data-owner-authenticated") || "").toLowerCase();
+  const ownerAuthenticated = rawOwnerAuthenticated === "1" || rawOwnerAuthenticated === "true";
 
   const isSeparatorLike = (rawText) => {
     const compact = (rawText || "").replace(/[\s\u3000]+/gu, "");
@@ -282,9 +284,11 @@
         );
         window.scrollTo({ top, behavior: "auto" });
         // Mark chapter as initialized even when user leaves quickly after opening.
-        window.setTimeout(() => {
-          persist();
-        }, 0);
+        if (ownerAuthenticated) {
+          window.setTimeout(() => {
+            persist();
+          }, 0);
+        }
       });
     }
   }
@@ -294,6 +298,10 @@
   const csrfToken = (document.querySelector("meta[name='csrf-token']") || {}).content || "";
 
   const persist = () => {
+    if (!ownerAuthenticated) {
+      return;
+    }
+
     const payload = {
       chapter_path: chapterPath,
       scroll_y: Math.max(0, Math.floor(window.scrollY || 0)),
@@ -310,12 +318,14 @@
     }).catch(() => {});
   };
 
-  window.addEventListener("scroll", () => {
-    if (saveTimer) {
-      clearTimeout(saveTimer);
-    }
-    saveTimer = window.setTimeout(persist, 250);
-  });
+  if (ownerAuthenticated) {
+    window.addEventListener("scroll", () => {
+      if (saveTimer) {
+        clearTimeout(saveTimer);
+      }
+      saveTimer = window.setTimeout(persist, 250);
+    });
 
-  window.addEventListener("beforeunload", persist);
+    window.addEventListener("beforeunload", persist);
+  }
 })();

@@ -487,6 +487,7 @@ def create_app() -> Flask:
             next_entry=next_entry,
             saved_scroll=saved_scroll,
             has_saved_progress=has_saved_progress,
+            owner_authenticated=_owner_logged_in(),
         )
 
     @app.get("/read/<path:chapter_path>/toc")
