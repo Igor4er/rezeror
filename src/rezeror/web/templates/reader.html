@@ -28,17 +28,6 @@
   </nav>
 
   <section class="reader-controls" aria-label="Reader options">
-  <div class="reader-ruler" data-reader-ruler aria-label="Adjust text width">
-    <div class="ruler-track" data-ruler-track>
-      <div class="ruler-text-zone" data-ruler-zone></div>
-      <div class="ruler-handle ruler-handle-left" data-ruler-handle="left" tabindex="0" role="slider" aria-label="Left text boundary" aria-valuemin="620" aria-valuemax="1100" aria-valuenow="760"></div>
-      <div class="ruler-handle ruler-handle-right" data-ruler-handle="right" tabindex="0" role="slider" aria-label="Right text boundary" aria-valuemin="620" aria-valuemax="1100" aria-valuenow="760"></div>
-    </div>
-    <div class="ruler-footer">
-      <span class="reader-width-value" data-reader-width-value>760px</span>
-    </div>
-  </div>
-
   <div class="reader-font-control" aria-label="Adjust text size">
     <div class="font-track" data-font-track>
       <span class="font-track-glyph font-track-glyph-small" aria-hidden="true">A</span>
@@ -48,9 +37,25 @@
       </div>
       <span class="font-track-glyph font-track-glyph-large" aria-hidden="true">A</span>
     </div>
-    <div class="ruler-footer">
-      <span class="reader-width-value" data-reader-font-value>18px</span>
+  </div>
+
+  <div class="reader-ruler" data-reader-ruler aria-label="Adjust text width">
+    <div class="ruler-track" data-ruler-track>
+      <div class="ruler-text-zone" data-ruler-zone></div>
+      <div class="ruler-handle ruler-handle-left" data-ruler-handle="left" tabindex="0" role="slider" aria-label="Left text boundary" aria-valuemin="620" aria-valuemax="1100" aria-valuenow="760"></div>
+      <div class="ruler-handle ruler-handle-right" data-ruler-handle="right" tabindex="0" role="slider" aria-label="Right text boundary" aria-valuemin="620" aria-valuemax="1100" aria-valuenow="760"></div>
     </div>
+  </div>
+
+  <div class="reader-metrics" aria-label="Current reader settings">
+    <span class="reader-metric">
+      <span class="reader-metric-icon" aria-hidden="true">Aa</span>
+      <span class="reader-width-value" data-reader-font-value>18px</span>
+    </span>
+    <span class="reader-metric">
+      <span class="reader-metric-icon" aria-hidden="true">&lt;&gt;</span>
+      <span class="reader-width-value" data-reader-width-value>760px</span>
+    </span>
   </div>
 
   <article class="reader-content prose">

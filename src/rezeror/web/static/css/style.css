@@ -263,14 +263,19 @@ a:hover {
   background: #2a2118;
 }
 
+.reader-controls {
+  display: grid;
+  gap: 0.18rem;
+}
+
 .reader-ruler {
-  margin: 0.75rem 0 0;
+  margin: 0;
   user-select: none;
   -webkit-user-select: none;
 }
 
 .reader-font-control {
-  margin: 0.9rem 0 0;
+  margin: 0;
   user-select: none;
   -webkit-user-select: none;
 }
@@ -343,15 +348,39 @@ a:hover {
   box-shadow: 0 0 0 2px rgba(219, 179, 107, 0.4);
 }
 
-.ruler-footer {
-  display: flex;
-  justify-content: center;
-  margin-top: 0.75rem;
-}
-
 .reader-width-value {
   color: var(--muted);
   font-size: 0.78rem;
+}
+
+.reader-metrics {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.8rem;
+  margin-top: 0.1rem;
+  flex-wrap: wrap;
+}
+
+.reader-metric {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.34rem;
+}
+
+.reader-metric-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.8rem;
+  padding: 0.1rem 0.38rem;
+  border: 1px solid #6f5731;
+  border-radius: 999px;
+  color: #f0d6a8;
+  background: rgba(33, 26, 18, 0.8);
+  font-size: 0.72rem;
+  line-height: 1;
+  letter-spacing: 0.03em;
 }
 
 .font-track {
@@ -539,7 +568,7 @@ a:hover {
 
   .reader-controls {
     padding: 0.65rem 0.75rem;
-    gap: 0.6rem;
+    gap: 0.18rem;
   }
 
   .reader-nav {
