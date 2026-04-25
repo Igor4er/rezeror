@@ -9,6 +9,7 @@ dependencies = [
 	"flask>=3.1.0",
 	"markdown>=3.8",
 	"markdownify>=1.1.0",
+	"nh3>=0.2.20",
 	"pyyaml>=6.0.2",
 	"requests>=2.32.0",
 ]

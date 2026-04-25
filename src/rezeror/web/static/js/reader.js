@@ -189,6 +189,8 @@
 
   let saveTimer = null;
 
+  const csrfToken = (document.querySelector("meta[name='csrf-token']") || {}).content || "";
+
   const persist = () => {
     const payload = {
       chapter_path: chapterPath,
@@ -197,7 +199,10 @@
 
     fetch("/api/progress", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRF-Token": csrfToken,
+      },
       body: JSON.stringify(payload),
       keepalive: true,
     }).catch(() => {});

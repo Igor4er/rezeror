@@ -11,6 +11,7 @@
     {% endif %}
     <form method="post" action="{{ url_for('owner_login_submit') }}">
       <input type="hidden" name="next" value="{{ next_path }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <p>
         <label for="owner-username">Username</label><br>
         <input id="owner-username" name="username" type="text" required>

@@ -2,17 +2,22 @@ from __future__ import annotations
 
 from datetime import timedelta
 import io
+import json
 from pathlib import Path
+import secrets
+import time
 from typing import Any
 from urllib.parse import urlsplit
 import zipfile
 import hmac
 import markdown
+import nh3
 import yaml
 from bs4 import BeautifulSoup
 from flask import Flask, abort, jsonify, redirect, render_template, request, session, url_for
+from flask import Response
 from flask.typing import ResponseReturnValue
-from hashlib import sha256
+from werkzeug.security import check_password_hash
 
 from rezeror.config import (
     CHAPTERS_DIR,
@@ -22,11 +27,63 @@ from rezeror.config import (
     ensure_data_dirs,
     owner_auth_enabled,
     owner_credentials,
+    owner_password_hash,
     owner_session_days,
     session_secret,
 )
 from rezeror.parser.storage import load_json
 from rezeror.web.progress import get_progress, has_progress, init_progress_db, save_progress
+
+
+MAX_UPLOAD_ARCHIVE_BYTES = 120_000_000
+MAX_TOTAL_UNCOMPRESSED_BYTES = 150_000_000
+MAX_SINGLE_FILE_BYTES = 25_000_000
+MAX_ARCHIVE_FILES = 5_000
+MAX_SCROLL_Y = 10_000_000
+
+LOGIN_WINDOW_SECONDS = 15 * 60
+LOGIN_MAX_ATTEMPTS = 8
+
+_login_attempts: dict[str, list[float]] = {}
+
+CSRF_TOKEN_KEY = "owner_csrf_token"
+CSRF_HEADER_NAME = "X-CSRF-Token"
+
+ALLOWED_HTML_TAGS = {
+    "a",
+    "blockquote",
+    "br",
+    "code",
+    "del",
+    "em",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "hr",
+    "li",
+    "ol",
+    "p",
+    "pre",
+    "strong",
+    "table",
+    "tbody",
+    "td",
+    "th",
+    "thead",
+    "tr",
+    "ul",
+}
+
+ALLOWED_HTML_ATTRIBUTES: dict[str, set[str]] = {
+    "a": {"href", "title"},
+    "th": {"colspan", "rowspan"},
+    "td": {"colspan", "rowspan"},
+}
+
+ALLOWED_HTML_PROTOCOLS = {"http", "https", "mailto"}
 
 
 def _load_manifest_entries() -> list[dict[str, Any]]:
@@ -60,7 +117,13 @@ def _read_markdown_with_front_matter(chapter_path: str) -> tuple[dict[str, Any],
 
 def _render_markdown_with_toc(markdown_text: str) -> tuple[str, list[dict[str, str]]]:
     md = markdown.Markdown(extensions=["toc", "fenced_code", "tables"])
-    html = md.convert(markdown_text)
+    raw_html = md.convert(markdown_text)
+    html = nh3.clean(
+        raw_html,
+        tags=ALLOWED_HTML_TAGS,
+        attributes=ALLOWED_HTML_ATTRIBUTES,
+        url_schemes=ALLOWED_HTML_PROTOCOLS,
+    )
 
     soup = BeautifulSoup(html, "html.parser")
     toc_items: list[dict[str, str]] = []
@@ -127,6 +190,56 @@ def _require_owner_json() -> ResponseReturnValue | None:
     return None
 
 
+def _client_addr() -> str:
+    forwarded = request.headers.get("X-Forwarded-For", "").strip()
+    if forwarded:
+        return forwarded.split(",", 1)[0].strip()
+    return request.remote_addr or "unknown"
+
+
+def _is_login_allowed(username: str) -> bool:
+    now = time.time()
+    key = f"{_client_addr()}:{username.lower()}"
+    attempts = [ts for ts in _login_attempts.get(key, []) if now - ts <= LOGIN_WINDOW_SECONDS]
+    _login_attempts[key] = attempts
+    return len(attempts) < LOGIN_MAX_ATTEMPTS
+
+
+def _record_login_failure(username: str) -> None:
+    now = time.time()
+    key = f"{_client_addr()}:{username.lower()}"
+    attempts = [ts for ts in _login_attempts.get(key, []) if now - ts <= LOGIN_WINDOW_SECONDS]
+    attempts.append(now)
+    _login_attempts[key] = attempts
+
+
+def _clear_login_failures(username: str) -> None:
+    key = f"{_client_addr()}:{username.lower()}"
+    _login_attempts.pop(key, None)
+
+
+def _get_or_create_csrf_token() -> str:
+    token = session.get(CSRF_TOKEN_KEY)
+    if isinstance(token, str) and token:
+        return token
+    token = secrets.token_urlsafe(32)
+    session[CSRF_TOKEN_KEY] = token
+    return token
+
+
+def _require_csrf() -> ResponseReturnValue | None:
+    expected = session.get(CSRF_TOKEN_KEY)
+    if not isinstance(expected, str) or not expected:
+        return _json_error("csrf token is missing", 403)
+
+    provided = request.headers.get(CSRF_HEADER_NAME)
+    if not provided:
+        provided = request.form.get("csrf_token")
+    if not isinstance(provided, str) or not hmac.compare_digest(provided, expected):
+        return _json_error("csrf token is invalid", 403)
+    return None
+
+
 def _wants_json_response() -> bool:
     if request.is_json:
         return True
@@ -164,21 +277,87 @@ def _extract_owner_login_payload() -> tuple[str, str, str]:
 def _owner_login_failure(message: str, status: int, next_path: str) -> ResponseReturnValue:
     if _wants_json_response():
         return _json_error(message, status)
-    return render_template("owner_login.html", next_path=next_path, error=message), status
+    return render_template(
+        "owner_login.html",
+        next_path=next_path,
+        error=message,
+        csrf_token=_get_or_create_csrf_token(),
+    ), status
 
 
 def _owner_login_success(next_path: str) -> ResponseReturnValue:
+    token = _get_or_create_csrf_token()
     if _wants_json_response():
-        return jsonify({"ok": True})
+        return jsonify({"ok": True, "csrf_token": token})
     return redirect(next_path)
 
 
+def _owner_password_matches(submitted_password: str) -> bool:
+    _, expected_password = owner_credentials()
+    expected_hash = owner_password_hash().strip()
+
+    if expected_hash:
+        try:
+            return check_password_hash(expected_hash, submitted_password)
+        except ValueError:
+            return False
+
+    if not expected_password:
+        return False
+    return hmac.compare_digest(expected_password, submitted_password)
+
+
+def _validate_uploaded_json(target: Path, data: bytes) -> None:
+    try:
+        payload = json.loads(data.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"invalid JSON payload for {target.name}") from exc
+
+    if target == MANIFEST_PATH:
+        if not isinstance(payload, dict) or not isinstance(payload.get("entries", []), list):
+            raise ValueError("manifest.json must be an object with an entries list")
+        return
+
+    if target == SYNC_STATE_PATH:
+        if not isinstance(payload, dict) or not isinstance(payload.get("entries", {}), dict):
+            raise ValueError("sync_state.json must be an object with an entries object")
+
+
+def _validate_uploaded_content(target: Path, data: bytes) -> None:
+    if target == MANIFEST_PATH or target == SYNC_STATE_PATH:
+        _validate_uploaded_json(target, data)
+        return
+    if target == PROGRESS_DB_PATH:
+        if not data.startswith(b"SQLite format 3\x00"):
+            raise ValueError("progress.sqlite3 is not a valid sqlite3 file")
+        return
+    if target.suffix != ".md":
+        raise ValueError("unsupported uploaded file type")
+    try:
+        data.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError("chapter markdown files must be UTF-8 encoded") from exc
+
+
+def _write_bytes_atomically(target: Path, data: bytes) -> None:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temp = target.with_suffix(target.suffix + ".upload.tmp")
+    temp.write_bytes(data)
+    temp.replace(target)
+
+
 def _safe_upload_target(member_name: str) -> Path | None:
+    if not member_name or "\x00" in member_name or "\\" in member_name:
+        return None
+
     pure = Path(member_name)
     if pure.is_absolute() or ".." in pure.parts:
         return None
 
     normalized = pure.as_posix().lstrip("/")
+    if normalized.startswith("/"):
+        return None
+
     if normalized == "state/manifest.json":
         return MANIFEST_PATH
     if normalized == "state/sync_state.json":
@@ -195,15 +374,24 @@ def _safe_upload_target(member_name: str) -> Path | None:
 
 
 def _import_content_archive(archive_bytes: bytes) -> dict[str, int]:
-    max_total_uncompressed = 1_500_000_000
     total_uncompressed = 0
     imported = 0
     skipped = 0
+    pending_writes: list[tuple[Path, bytes]] = []
 
     with zipfile.ZipFile(io.BytesIO(archive_bytes)) as zf:
-        for info in zf.infolist():
+        infos = zf.infolist()
+        if len(infos) > MAX_ARCHIVE_FILES:
+            raise ValueError("archive has too many files")
+
+        for info in infos:
             if info.is_dir():
                 continue
+
+            if info.file_size > MAX_SINGLE_FILE_BYTES:
+                raise ValueError(f"archive member too large: {info.filename}")
+            if info.compress_size > 0 and info.file_size / info.compress_size > 200:
+                raise ValueError(f"archive member compression ratio is too high: {info.filename}")
 
             target = _safe_upload_target(info.filename)
             if target is None:
@@ -211,14 +399,20 @@ def _import_content_archive(archive_bytes: bytes) -> dict[str, int]:
                 continue
 
             total_uncompressed += info.file_size
-            if total_uncompressed > max_total_uncompressed:
+            if total_uncompressed > MAX_TOTAL_UNCOMPRESSED_BYTES:
                 raise ValueError("archive is too large")
 
-            target.parent.mkdir(parents=True, exist_ok=True)
             with zf.open(info, "r") as src:
-                data = src.read()
-            target.write_bytes(data)
-            imported += 1
+                data = src.read(MAX_SINGLE_FILE_BYTES + 1)
+            if len(data) > MAX_SINGLE_FILE_BYTES:
+                raise ValueError(f"archive member too large after extraction: {info.filename}")
+
+            _validate_uploaded_content(target, data)
+            pending_writes.append((target, data))
+
+    for target, data in pending_writes:
+        _write_bytes_atomically(target, data)
+        imported += 1
 
     return {
         "imported": imported,
@@ -237,6 +431,28 @@ def create_app() -> Flask:
     )
     app.config["SECRET_KEY"] = session_secret()
     app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=owner_session_days())
+    app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_ARCHIVE_BYTES
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SECURE"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+
+    @app.after_request
+    def add_security_headers(response: Response) -> Response:
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        response.headers.setdefault(
+            "Content-Security-Policy",
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; base-uri 'self'; frame-ancestors 'none'",
+        )
+        return response
+
+    @app.context_processor
+    def inject_template_security_values() -> dict[str, Any]:
+        token = session.get(CSRF_TOKEN_KEY)
+        if _owner_logged_in():
+            token = _get_or_create_csrf_token()
+        return {"owner_csrf_token": token or ""}
 
     @app.get("/")
     @app.get("/library")
@@ -326,26 +542,45 @@ def create_app() -> Flask:
         next_path = _safe_next_path(request.args.get("next"))
         if _owner_logged_in():
             return redirect(next_path)
-        return render_template("owner_login.html", next_path=next_path, error=None)
+        return render_template(
+            "owner_login.html",
+            next_path=next_path,
+            error=None,
+            csrf_token=_get_or_create_csrf_token(),
+        )
 
     @app.post("/owner/login")
     def owner_login_submit() -> ResponseReturnValue:
         username, password, next_path = _extract_owner_login_payload()
 
+        if not request.is_json:
+            csrf_error = _require_csrf()
+            if csrf_error:
+                return _owner_login_failure("invalid csrf token", 403, next_path)
+
         if not owner_auth_enabled():
             return _owner_login_failure("owner authentication is not configured", 503, next_path)
 
-        expected_username, expected_password = owner_credentials()
-        if username == expected_username and hmac.compare_digest(sha256(expected_password.encode()).digest(), sha256(password.encode()).digest()):
+        if not _is_login_allowed(username):
+            return _owner_login_failure("too many attempts, try again later", 429, next_path)
+
+        expected_username, _ = owner_credentials()
+        if username == expected_username and _owner_password_matches(password):
             session.permanent = True
             session["is_owner"] = True
+            _clear_login_failures(username)
             return _owner_login_success(next_path)
 
+        _record_login_failure(username)
         return _owner_login_failure("invalid credentials", 403, next_path)
 
     @app.post("/owner/logout")
     def owner_logout() -> ResponseReturnValue:
+        csrf_error = _require_csrf()
+        if csrf_error:
+            return csrf_error
         session.pop("is_owner", None)
+        session.pop(CSRF_TOKEN_KEY, None)
         if _wants_json_response():
             return jsonify({"ok": True})
         return redirect(url_for("library"))
@@ -373,6 +608,10 @@ def create_app() -> Flask:
         if auth_error:
             return auth_error
 
+        csrf_error = _require_csrf()
+        if csrf_error:
+            return csrf_error
+
         payload = request.get_json(silent=True) or {}
         chapter_path = payload.get("chapter_path", "")
         scroll_y = payload.get("scroll_y", 0)
@@ -388,6 +627,8 @@ def create_app() -> Flask:
             scroll_int = max(0, int(scroll_y))
         except (TypeError, ValueError):
             return jsonify({"error": "scroll_y must be an integer"}), 400
+        if scroll_int > MAX_SCROLL_Y:
+            return jsonify({"error": "scroll_y exceeds maximum allowed value"}), 400
 
         save_progress(chapter_path, scroll_int)
         return jsonify({"ok": True})
@@ -397,6 +638,10 @@ def create_app() -> Flask:
         auth_error = _require_owner_json()
         if auth_error:
             return auth_error
+
+        csrf_error = _require_csrf()
+        if csrf_error:
+            return csrf_error
 
         upload_file = request.files.get("archive")
         if upload_file is not None:

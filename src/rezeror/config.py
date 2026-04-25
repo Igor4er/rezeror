@@ -4,6 +4,9 @@ import os
 from pathlib import Path
 
 
+MIN_SESSION_SECRET_LENGTH = 32
+
+
 def _env_path(name: str, default: Path) -> Path:
     raw = os.getenv(name)
     if not raw:
@@ -26,7 +29,7 @@ USER_AGENT = "rezeror-bot/0.1 (+https://github.com/Igor4er/rezeror)"
 
 
 def owner_auth_enabled() -> bool:
-    return bool(os.getenv("REZEROR_OWNER_PASSWORD"))
+    return bool(os.getenv("REZEROR_OWNER_PASSWORD") or os.getenv("REZEROR_OWNER_PASSWORD_HASH"))
 
 
 def owner_credentials() -> tuple[str, str]:
@@ -35,17 +38,26 @@ def owner_credentials() -> tuple[str, str]:
     return username, password
 
 
+def owner_password_hash() -> str:
+    return os.getenv("REZEROR_OWNER_PASSWORD_HASH", "")
+
+
 def session_secret() -> str:
-    return os.getenv("REZEROR_SESSION_SECRET", "rezeror-dev-session-secret")
+    secret = os.getenv("REZEROR_SESSION_SECRET", "")
+    if not secret:
+        raise ValueError("REZEROR_SESSION_SECRET must be configured")
+    if len(secret) < MIN_SESSION_SECRET_LENGTH:
+        raise ValueError(f"REZEROR_SESSION_SECRET must be at least {MIN_SESSION_SECRET_LENGTH} characters")
+    return secret
 
 
 def owner_session_days() -> int:
-    raw = os.getenv("REZEROR_OWNER_SESSION_DAYS", "3650")
+    raw = os.getenv("REZEROR_OWNER_SESSION_DAYS", "30")
     try:
         days = int(raw)
     except (TypeError, ValueError):
-        return 3650
-    return max(1, days)
+        return 30
+    return max(1, min(days, 30))
 
 
 def ensure_data_dirs() -> None:

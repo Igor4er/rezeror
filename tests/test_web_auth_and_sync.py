@@ -35,7 +35,7 @@ def app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setenv("REZEROR_OWNER_USERNAME", "owner")
     monkeypatch.setenv("REZEROR_OWNER_PASSWORD", "secret")
-    monkeypatch.setenv("REZEROR_SESSION_SECRET", "test-secret")
+    monkeypatch.setenv("REZEROR_SESSION_SECRET", "test-secret-with-at-least-32-characters")
 
     flask_app = web_app.create_app()
     flask_app.config.update(TESTING=True)
@@ -54,8 +54,12 @@ def test_progress_write_requires_owner_login(app):
 
     login = client.post("/owner/login", json={"username": "owner", "password": "secret"})
     assert login.status_code == 200
+    csrf_token = login.get_json()["csrf_token"]
 
-    allowed = client.post("/api/progress", json=payload)
+    blocked_missing_csrf = client.post("/api/progress", json=payload)
+    assert blocked_missing_csrf.status_code == 403
+
+    allowed = client.post("/api/progress", json=payload, headers={"X-CSRF-Token": csrf_token})
     assert allowed.status_code == 200
     assert allowed.get_json() == {"ok": True}
 
@@ -86,10 +90,12 @@ def test_content_upload_requires_owner_login_and_imports_chapters_and_state(app)
 
     login = client.post("/owner/login", json={"username": "owner", "password": "secret"})
     assert login.status_code == 200
+    csrf_token = login.get_json()["csrf_token"]
 
     allowed = client.post(
         "/api/content/upload",
         data={"archive": (make_archive(), "content.zip")},
+        headers={"X-CSRF-Token": csrf_token},
         content_type="multipart/form-data",
     )
     assert allowed.status_code == 200
@@ -102,3 +108,37 @@ def test_content_upload_requires_owner_login_and_imports_chapters_and_state(app)
     assert chapter_path.exists()
     assert web_app.MANIFEST_PATH.exists()
     assert web_app.SYNC_STATE_PATH.exists()
+
+
+def test_content_upload_rejects_invalid_manifest_payload(app):
+    client = app.test_client()
+    login = client.post("/owner/login", json={"username": "owner", "password": "secret"})
+    assert login.status_code == 200
+    csrf_token = login.get_json()["csrf_token"]
+
+    archive = io.BytesIO()
+    with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("state/manifest.json", "not-json")
+    archive.seek(0)
+
+    response = client.post(
+        "/api/content/upload",
+        data={"archive": (archive, "content.zip")},
+        headers={"X-CSRF-Token": csrf_token},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 400
+    assert "invalid JSON" in response.get_json()["error"]
+
+
+def test_owner_logout_requires_csrf(app):
+    client = app.test_client()
+    login = client.post("/owner/login", json={"username": "owner", "password": "secret"})
+    assert login.status_code == 200
+    csrf_token = login.get_json()["csrf_token"]
+
+    blocked = client.post("/owner/logout")
+    assert blocked.status_code == 403
+
+    allowed = client.post("/owner/logout", headers={"X-CSRF-Token": csrf_token})
+    assert allowed.status_code == 302

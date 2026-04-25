@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
+import os
 import tempfile
 import zipfile
 from pathlib import Path
@@ -82,11 +84,22 @@ def _build_upload_archive(archive_path: Path, include_progress: bool) -> int:
 def cmd_upload_content(
     base_url: str,
     username: str,
-    password: str,
+    password: str | None,
+    password_stdin: bool,
     include_progress: bool,
     timeout: float,
 ) -> int:
     base = base_url.rstrip("/")
+    resolved_password = password
+    if not resolved_password:
+        env_password = os.getenv("REZEROR_OWNER_PASSWORD", "")
+        if env_password:
+            resolved_password = env_password
+        elif password_stdin:
+            resolved_password = getpass.getpass("Owner password: ")
+    if not resolved_password:
+        print("Owner password is required. Use --password, REZEROR_OWNER_PASSWORD, or --password-stdin.")
+        return 1
 
     with tempfile.TemporaryDirectory(prefix="rezeror-upload-") as td:
         archive_path = Path(td) / "content.zip"
@@ -98,17 +111,24 @@ def cmd_upload_content(
         with requests.Session() as session:
             login_response = session.post(
                 f"{base}/owner/login",
-                json={"username": username, "password": password},
+                json={"username": username, "password": resolved_password},
                 timeout=timeout,
             )
             if login_response.status_code != 200:
                 print(f"Login failed: {login_response.status_code} {login_response.text}")
                 return 1
 
+            csrf_token = ""
+            try:
+                csrf_token = str((login_response.json() or {}).get("csrf_token", ""))
+            except ValueError:
+                csrf_token = ""
+
             with archive_path.open("rb") as fp:
                 upload_response = session.post(
                     f"{base}/api/content/upload",
                     files={"archive": ("content.zip", fp, "application/zip")},
+                    headers={"X-CSRF-Token": csrf_token} if csrf_token else None,
                     timeout=timeout,
                 )
 
@@ -151,7 +171,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     upload_cmd.add_argument("--base-url", required=True, help="Remote base URL, e.g. https://example.up.railway.app")
     upload_cmd.add_argument("--username", required=True, help="Owner username")
-    upload_cmd.add_argument("--password", required=True, help="Owner password")
+    upload_cmd.add_argument("--password", default=None, help="Owner password (avoid passing via shell history when possible)")
+    upload_cmd.add_argument(
+        "--password-stdin",
+        action="store_true",
+        help="Read owner password from an interactive prompt",
+    )
     upload_cmd.add_argument(
         "--include-progress",
         action="store_true",
@@ -163,6 +188,7 @@ def build_parser() -> argparse.ArgumentParser:
             base_url=args.base_url,
             username=args.username,
             password=args.password,
+            password_stdin=args.password_stdin,
             include_progress=args.include_progress,
             timeout=args.timeout,
         )

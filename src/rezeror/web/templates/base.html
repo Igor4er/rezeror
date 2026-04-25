@@ -3,6 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ owner_csrf_token }}">
     <title>{% block title %}Rezeror{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   </head>
@@ -12,6 +13,7 @@
       <nav>
         {% if session.get('is_owner') %}
           <form method="post" action="{{ url_for('owner_logout') }}">
+            <input type="hidden" name="csrf_token" value="{{ owner_csrf_token }}">
             <button class="btn" type="submit">Owner Logout</button>
           </form>
         {% else %}

@@ -8,7 +8,7 @@ uv sync                          # installs all deps + dev (pytest)
 uv run rezeror inspect-toc       # inspect TOC without downloading
 uv run rezeror sync --arc 3      # sync one arc
 uv run rezeror sync              # full sync (649 chapters)
-uv run rezeror upload-content --base-url https://your-app.up.railway.app --username owner --password '***'
+REZEROR_OWNER_PASSWORD='***' uv run rezeror upload-content --base-url https://your-app.up.railway.app --username owner
 uv run rezeror status
 uv run rezeror serve             # http://127.0.0.1:5000
 uv run pytest 
@@ -61,8 +61,13 @@ Upload local parsed content to remote server (owner auth required):
 ```bash
 uv run rezeror upload-content \
 	--base-url https://your-app.up.railway.app \
+	--username owner
+
+# or prompt securely
+uv run rezeror upload-content \
+	--base-url https://your-app.up.railway.app \
 	--username owner \
-	--password 'strong-password'
+	--password-stdin
 ```
 
 Include local progress DB in upload:
@@ -71,7 +76,6 @@ Include local progress DB in upload:
 uv run rezeror upload-content \
 	--base-url https://your-app.up.railway.app \
 	--username owner \
-	--password 'strong-password' \
 	--include-progress
 ```
 
@@ -102,8 +106,8 @@ docker run --rm -p 8080:8080 \
 	-e REZEROR_DATA_DIR=/data \
 	-e REZEROR_DB_PATH=/data/progress.sqlite3 \
 	-e REZEROR_OWNER_USERNAME=owner \
-	-e REZEROR_OWNER_PASSWORD='change-me' \
-	-e REZEROR_SESSION_SECRET='change-this' \
+	-e REZEROR_OWNER_PASSWORD='<set-strong-password>' \
+	-e REZEROR_SESSION_SECRET='<set-32+-char-random-secret>' \
 	-v rezeror_data:/data \
 	rezeror:latest
 ```
@@ -131,9 +135,10 @@ You can override storage locations and owner auth with env vars:
 - `REZEROR_DATA_DIR`: base data directory (default: `./data` under project root)
 - `REZEROR_DB_PATH`: SQLite progress DB path (default: `<REZEROR_DATA_DIR>/progress.sqlite3`)
 - `REZEROR_OWNER_USERNAME`: owner login username (default: `owner`)
-- `REZEROR_OWNER_PASSWORD`: owner login password (required to enable owner-only writes)
-- `REZEROR_SESSION_SECRET`: Flask session signing secret (set this in production)
-- `REZEROR_OWNER_SESSION_DAYS`: owner login session lifetime in days (default: `3650`)
+- `REZEROR_OWNER_PASSWORD`: owner login password (required unless `REZEROR_OWNER_PASSWORD_HASH` is set)
+- `REZEROR_OWNER_PASSWORD_HASH`: optional Werkzeug-compatible password hash (preferred over plaintext password)
+- `REZEROR_SESSION_SECRET`: Flask session signing secret (required, minimum length 32)
+- `REZEROR_OWNER_SESSION_DAYS`: owner login session lifetime in days (default: `30`, max `30`)
 
 The app creates missing folders automatically for chapters/state and for the progress DB parent directory.
 
@@ -144,16 +149,16 @@ export REZEROR_DATA_DIR=/app/data
 export REZEROR_DB_PATH=/app/state/progress.sqlite3
 export REZEROR_OWNER_USERNAME=ihor
 export REZEROR_OWNER_PASSWORD='strong-password'
-export REZEROR_SESSION_SECRET='long-random-secret'
-export REZEROR_OWNER_SESSION_DAYS=3650
+export REZEROR_SESSION_SECRET='long-random-secret-at-least-32-characters'
+export REZEROR_OWNER_SESSION_DAYS=30
 ```
 
 ## Owner-Protected API Routes
 
 - `POST /owner/login` supports form submit and JSON body `{ "username": "...", "password": "..." }`
 - `POST /owner/logout` supports both browser and JSON clients
-- `POST /api/progress` is owner-only (public can still read via `GET /api/progress`)
-- `POST /api/content/upload` is owner-only and accepts a ZIP archive in multipart form field `archive`
+- `POST /api/progress` is owner-only and requires `X-CSRF-Token`
+- `POST /api/content/upload` is owner-only, requires `X-CSRF-Token`, and accepts a ZIP archive in multipart form field `archive`
 	- accepted paths inside ZIP:
 		- `chapters/**/*.md`
 		- `state/manifest.json`
