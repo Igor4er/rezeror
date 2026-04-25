@@ -1,6 +1,6 @@
 # Rezeror
 
-Rezeror is a uv-based Python 3.14+ app that:
+[Rezeror](https://rezeror.ig4er.link/library) is a uv-based Python 3.14+ app that:
 
 ```
 quick start
