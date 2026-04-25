@@ -29,13 +29,23 @@
     }
 
     if (!activeEntry) {
-      contextBar.hidden = true;
+      if (lastLabel) {
+        contextValue.textContent = '';
+        lastLabel = '';
+      }
+      contextBar.classList.remove('is-visible');
+      contextBar.setAttribute('aria-hidden', 'true');
       return;
     }
 
     const firstEntry = entries[0];
     if (window.scrollY + stickyTop < firstEntry.offsetTop) {
-      contextBar.hidden = true;
+      if (lastLabel) {
+        contextValue.textContent = '';
+        lastLabel = '';
+      }
+      contextBar.classList.remove('is-visible');
+      contextBar.setAttribute('aria-hidden', 'true');
       return;
     }
 
@@ -48,7 +58,8 @@
       lastLabel = label;
     }
 
-    contextBar.hidden = false;
+    contextBar.classList.add('is-visible');
+    contextBar.setAttribute('aria-hidden', 'false');
   };
 
   let ticking = false;
