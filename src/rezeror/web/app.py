@@ -461,6 +461,10 @@ def create_app() -> Flask:
         grouped_entries = _group_entries(entries)
         return render_template("library.html", entries=entries, grouped_entries=grouped_entries)
 
+    @app.get("/favicon.ico")
+    def favicon() -> Response:
+        return app.send_static_file("favicon.ico")
+
     @app.get("/read/<path:chapter_path>")
     def read_chapter(chapter_path: str) -> str:
         entries = _load_manifest_entries()
