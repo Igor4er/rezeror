@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import io
 from pathlib import Path
+import zipfile
 
 import pytest
 
@@ -14,6 +16,7 @@ def app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     chapters_dir = data_dir / "chapters"
     state_dir = data_dir / "state"
     manifest_path = state_dir / "manifest.json"
+    sync_state_path = state_dir / "sync_state.json"
     db_path = tmp_path / "nested" / "state" / "progress.sqlite3"
 
     def ensure_data_dirs() -> None:
@@ -23,6 +26,8 @@ def app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr(web_app, "CHAPTERS_DIR", chapters_dir)
     monkeypatch.setattr(web_app, "MANIFEST_PATH", manifest_path)
+    monkeypatch.setattr(web_app, "SYNC_STATE_PATH", sync_state_path)
+    monkeypatch.setattr(web_app, "PROGRESS_DB_PATH", db_path)
     monkeypatch.setattr(web_app, "ensure_data_dirs", ensure_data_dirs)
 
     monkeypatch.setattr(web_progress, "PROGRESS_DB_PATH", db_path)
@@ -60,31 +65,40 @@ def test_progress_write_requires_owner_login(app):
     assert body["has_saved_progress"] is True
 
 
-def test_sync_endpoint_requires_owner_login_and_runs_when_authenticated(app, monkeypatch: pytest.MonkeyPatch):
+def test_content_upload_requires_owner_login_and_imports_chapters_and_state(app):
     client = app.test_client()
 
-    called: dict[str, object] = {}
+    def make_archive() -> io.BytesIO:
+        archive = io.BytesIO()
+        with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("chapters/arc-1/chapter-1.md", "# Chapter 1\n")
+            zf.writestr("state/manifest.json", '{"entries": []}')
+            zf.writestr("state/sync_state.json", '{"entries": {}, "last_toc_hash": "", "last_sync_at": null}')
+        archive.seek(0)
+        return archive
 
-    def fake_sync(arc_filter=None, force_recheck=False):
-        called["arc_filter"] = arc_filter
-        called["force_recheck"] = force_recheck
-        return {
-            "summary": {"total": 1, "new": 1, "updated": 0, "skipped": 0, "errors": 0},
-            "counts": {"Arc 1": {"Main": 1}},
-            "entries": 1,
-        }
-
-    monkeypatch.setattr(web_app, "sync", fake_sync)
-
-    blocked = client.post("/api/sync", json={})
+    blocked = client.post(
+        "/api/content/upload",
+        data={"archive": (make_archive(), "content.zip")},
+        content_type="multipart/form-data",
+    )
     assert blocked.status_code == 403
 
     login = client.post("/owner/login", json={"username": "owner", "password": "secret"})
     assert login.status_code == 200
 
-    allowed = client.post("/api/sync", json={"arc": 1, "force_recheck": True})
+    allowed = client.post(
+        "/api/content/upload",
+        data={"archive": (make_archive(), "content.zip")},
+        content_type="multipart/form-data",
+    )
     assert allowed.status_code == 200
 
     body = allowed.get_json()
-    assert body["entries"] == 1
-    assert called == {"arc_filter": 1, "force_recheck": True}
+    assert body["ok"] is True
+    assert body["imported"] == 3
+
+    chapter_path = web_app.CHAPTERS_DIR / "arc-1" / "chapter-1.md"
+    assert chapter_path.exists()
+    assert web_app.MANIFEST_PATH.exists()
+    assert web_app.SYNC_STATE_PATH.exists()

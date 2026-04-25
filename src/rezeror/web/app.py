@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from datetime import timedelta
+import io
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
+import zipfile
 import hmac
 import markdown
 import yaml
@@ -15,6 +17,8 @@ from hashlib import sha256
 from rezeror.config import (
     CHAPTERS_DIR,
     MANIFEST_PATH,
+    PROGRESS_DB_PATH,
+    SYNC_STATE_PATH,
     ensure_data_dirs,
     owner_auth_enabled,
     owner_credentials,
@@ -22,7 +26,6 @@ from rezeror.config import (
     session_secret,
 )
 from rezeror.parser.storage import load_json
-from rezeror.parser.sync import sync
 from rezeror.web.progress import get_progress, has_progress, init_progress_db, save_progress
 
 
@@ -168,6 +171,59 @@ def _owner_login_success(next_path: str) -> ResponseReturnValue:
     if _wants_json_response():
         return jsonify({"ok": True})
     return redirect(next_path)
+
+
+def _safe_upload_target(member_name: str) -> Path | None:
+    pure = Path(member_name)
+    if pure.is_absolute() or ".." in pure.parts:
+        return None
+
+    normalized = pure.as_posix().lstrip("/")
+    if normalized == "state/manifest.json":
+        return MANIFEST_PATH
+    if normalized == "state/sync_state.json":
+        return SYNC_STATE_PATH
+    if normalized == "progress.sqlite3":
+        return PROGRESS_DB_PATH
+    if normalized.startswith("chapters/") and normalized.endswith(".md"):
+        rel = normalized[len("chapters/"):]
+        chapter_target = CHAPTERS_DIR / rel
+        if CHAPTERS_DIR.resolve() not in chapter_target.resolve().parents and chapter_target.resolve() != CHAPTERS_DIR.resolve():
+            return None
+        return chapter_target
+    return None
+
+
+def _import_content_archive(archive_bytes: bytes) -> dict[str, int]:
+    max_total_uncompressed = 1_500_000_000
+    total_uncompressed = 0
+    imported = 0
+    skipped = 0
+
+    with zipfile.ZipFile(io.BytesIO(archive_bytes)) as zf:
+        for info in zf.infolist():
+            if info.is_dir():
+                continue
+
+            target = _safe_upload_target(info.filename)
+            if target is None:
+                skipped += 1
+                continue
+
+            total_uncompressed += info.file_size
+            if total_uncompressed > max_total_uncompressed:
+                raise ValueError("archive is too large")
+
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with zf.open(info, "r") as src:
+                data = src.read()
+            target.write_bytes(data)
+            imported += 1
+
+    return {
+        "imported": imported,
+        "skipped": skipped,
+    }
 
 
 def create_app() -> Flask:
@@ -336,27 +392,28 @@ def create_app() -> Flask:
         save_progress(chapter_path, scroll_int)
         return jsonify({"ok": True})
 
-    @app.post("/api/sync")
-    def api_sync():
+    @app.post("/api/content/upload")
+    def api_content_upload():
         auth_error = _require_owner_json()
         if auth_error:
             return auth_error
 
-        payload = request.get_json(silent=True) or {}
-        arc = payload.get("arc")
-        force_recheck = bool(payload.get("force_recheck", False))
-
-        if arc in (None, ""):
-            arc_filter = None
+        upload_file = request.files.get("archive")
+        if upload_file is not None:
+            archive_bytes = upload_file.read()
         else:
-            try:
-                arc_filter = int(arc)
-            except (TypeError, ValueError):
-                return _json_error("arc must be an integer", 400)
-            if arc_filter <= 0:
-                return _json_error("arc must be positive", 400)
+            archive_bytes = request.get_data(cache=False)
 
-        result = sync(arc_filter=arc_filter, force_recheck=force_recheck)
-        return jsonify(result)
+        if not archive_bytes:
+            return _json_error("archive file is required", 400)
+
+        try:
+            result = _import_content_archive(archive_bytes)
+        except zipfile.BadZipFile:
+            return _json_error("invalid zip archive", 400)
+        except ValueError as exc:
+            return _json_error(str(exc), 400)
+
+        return jsonify({"ok": True, **result})
 
     return app

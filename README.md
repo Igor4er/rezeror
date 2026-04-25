@@ -8,6 +8,7 @@ uv sync                          # installs all deps + dev (pytest)
 uv run rezeror inspect-toc       # inspect TOC without downloading
 uv run rezeror sync --arc 3      # sync one arc
 uv run rezeror sync              # full sync (649 chapters)
+uv run rezeror upload-content --base-url https://your-app.up.railway.app --username owner --password '***'
 uv run rezeror status
 uv run rezeror serve             # http://127.0.0.1:5000
 uv run pytest 
@@ -53,6 +54,25 @@ Force recheck chapter pages even if TOC hash is unchanged:
 
 ```bash
 uv run rezeror sync --force-recheck
+```
+
+Upload local parsed content to remote server (owner auth required):
+
+```bash
+uv run rezeror upload-content \
+	--base-url https://your-app.up.railway.app \
+	--username owner \
+	--password 'strong-password'
+```
+
+Include local progress DB in upload:
+
+```bash
+uv run rezeror upload-content \
+	--base-url https://your-app.up.railway.app \
+	--username owner \
+	--password 'strong-password' \
+	--include-progress
 ```
 
 Status:
@@ -133,10 +153,12 @@ export REZEROR_OWNER_SESSION_DAYS=3650
 - `POST /owner/login` supports form submit and JSON body `{ "username": "...", "password": "..." }`
 - `POST /owner/logout` supports both browser and JSON clients
 - `POST /api/progress` is owner-only (public can still read via `GET /api/progress`)
-- `POST /api/sync` is owner-only and supports:
-	- `{}` for full sync
-	- `{ "arc": 3 }` for one arc
-	- `{ "force_recheck": true }` to force chapter checks
+- `POST /api/content/upload` is owner-only and accepts a ZIP archive in multipart form field `archive`
+	- accepted paths inside ZIP:
+		- `chapters/**/*.md`
+		- `state/manifest.json`
+		- `state/sync_state.json`
+		- `progress.sqlite3` (optional)
 
 There is also a web login page at `/owner/login`.
 
