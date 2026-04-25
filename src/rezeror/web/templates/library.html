@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}Library - Rezeror{% endblock %}
+
+{% block content %}
+<section class="library-wrap">
+  <h1>Library</h1>
+  <p class="muted">{{ entries|length }} chapters synced.</p>
+  <div class="library-groups">
+    {% for arc_group in grouped_entries %}
+      <section class="arc-group">
+        <h2 class="arc-title">{{ arc_group.arc }}</h2>
+        <p class="muted">{{ arc_group.count }} chapters</p>
+        {% for phase_group in arc_group.phases %}
+          <h3 class="phase-title">{{ phase_group.phase }}</h3>
+          <ul class="library-list">
+            {% for entry in phase_group.entries %}
+              <li>
+                <a href="{{ url_for('read_chapter', chapter_path=entry.file_path) }}">{{ entry.title }}</a>
+              </li>
+            {% endfor %}
+          </ul>
+        {% endfor %}
+      </section>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

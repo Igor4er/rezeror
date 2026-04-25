@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}{{ metadata.title or chapter_path }} - Rezeror{% endblock %}
+
+{% block content %}
+<section
+  class="reader-wrap"
+  data-chapter-path="{{ chapter_path }}"
+  data-saved-scroll="{{ saved_scroll }}"
+  data-has-saved-progress="{{ '1' if has_saved_progress else '0' }}"
+>
+  <nav class="reader-nav top-nav">
+    <div class="nav-left">
+      {% if prev_entry %}
+        <a class="btn" href="{{ url_for('read_chapter', chapter_path=prev_entry.file_path) }}">Previous</a>
+      {% endif %}
+    </div>
+    <div class="nav-center">
+      <a class="btn" href="{{ url_for('chapter_toc', chapter_path=chapter_path) }}">Contents</a>
+    </div>
+    <div class="nav-right">
+      {% if next_entry %}
+        <a class="btn" href="{{ url_for('read_chapter', chapter_path=next_entry.file_path) }}">Next</a>
+      {% endif %}
+    </div>
+  </nav>
+
+  <section class="reader-controls" aria-label="Reader options">
+    <label for="reader-width-slider">Text width</label>
+    <input
+      id="reader-width-slider"
+      type="range"
+      min="620"
+      max="1100"
+      step="20"
+      value="760"
+      data-reader-width-slider
+    >
+    <span class="reader-width-value" data-reader-width-value>760px</span>
+  </section>
+
+  <article class="reader-content prose">
+    <h1>{{ metadata.title or metadata.chapter or chapter_path }}</h1>
+    {% if metadata.arc %}
+      <p class="meta">{{ metadata.arc }}{% if metadata.phase %} / {{ metadata.phase }}{% endif %}</p>
+    {% endif %}
+    {{ html|safe }}
+  </article>
+
+  <nav class="reader-nav bottom-nav">
+    <div class="nav-left">
+      {% if prev_entry %}
+        <a class="btn" href="{{ url_for('read_chapter', chapter_path=prev_entry.file_path) }}">Previous</a>
+      {% endif %}
+    </div>
+    <div class="nav-center">
+      <a class="btn" href="{{ url_for('chapter_toc', chapter_path=chapter_path) }}">Contents</a>
+    </div>
+    <div class="nav-right">
+      {% if next_entry %}
+        <a class="btn" href="{{ url_for('read_chapter', chapter_path=next_entry.file_path) }}">Next</a>
+      {% endif %}
+    </div>
+  </nav>
+</section>
+<script src="{{ url_for('static', filename='js/reader.js') }}"></script>
+{% endblock %}

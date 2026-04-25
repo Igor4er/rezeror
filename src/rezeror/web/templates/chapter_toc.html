@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}Contents - {{ metadata.title or chapter_path }}{% endblock %}
+
+{% block content %}
+<section class="toc-wrap">
+  <nav class="reader-nav top-nav">
+    <div class="nav-left">
+      {% if prev_entry %}
+        <a class="btn" href="{{ url_for('read_chapter', chapter_path=prev_entry.file_path) }}">Previous</a>
+      {% endif %}
+    </div>
+    <div class="nav-center">
+      <a class="btn" href="{{ url_for('read_chapter', chapter_path=chapter_path) }}">Back To Chapter</a>
+    </div>
+    <div class="nav-right">
+      {% if next_entry %}
+        <a class="btn" href="{{ url_for('read_chapter', chapter_path=next_entry.file_path) }}">Next</a>
+      {% endif %}
+    </div>
+  </nav>
+
+  <h1>Contents</h1>
+  <p class="muted">{{ metadata.title or chapter_path }}</p>
+  {% if progress_info %}
+    <section class="progress-panel">
+      <h2>Reading Progress</h2>
+      <p>
+        Overall: {{ progress_info.overall_position }} / {{ progress_info.overall_total }}
+        ({{ progress_info.overall_percent }}%)
+      </p>
+      {% if progress_info.arc and progress_info.arc_position %}
+        <p>{{ progress_info.arc }}: {{ progress_info.arc_position }} / {{ progress_info.arc_total }}</p>
+      {% endif %}
+      {% if progress_info.phase and progress_info.phase_position %}
+        <p>{{ progress_info.phase }}: {{ progress_info.phase_position }} / {{ progress_info.phase_total }}</p>
+      {% endif %}
+    </section>
+  {% endif %}
+
+  {% if toc_items %}
+  <ul class="toc-list">
+    {% for item in toc_items %}
+      <li class="{{ item.level }}">
+        <a href="{{ url_for('read_chapter', chapter_path=chapter_path) }}#{{ item.id }}">{{ item.text }}</a>
+      </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+    <p class="muted">This chapter has no section headings. Use Previous/Next to keep reading.</p>
+  {% endif %}
+</section>
+{% endblock %}
