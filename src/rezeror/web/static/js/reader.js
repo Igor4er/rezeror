@@ -4,6 +4,113 @@
     return;
   }
 
+  const normalizeText = (value) =>
+    (value || "")
+      .replace(/[\s\u3000]+/gu, " ")
+      .trim();
+
+  const readerContent = root.querySelector(".reader-content");
+
+  const collectTranslatorNotes = (container) => {
+    if (!container) {
+      return { notes: new Map(), definitionElements: new WeakSet() };
+    }
+
+    const notes = new Map();
+    const definitionElements = new WeakSet();
+    const definitionMatcher = /^\[(\d+)\]\s*(?:[-–—:]\s*)?(.+)$/u;
+    const blocks = container.querySelectorAll("p, li");
+
+    for (const block of blocks) {
+      const text = normalizeText(block.textContent || "");
+      const match = text.match(definitionMatcher);
+      if (!match) {
+        continue;
+      }
+      notes.set(match[1], match[2].trim());
+      definitionElements.add(block);
+    }
+
+    return { notes, definitionElements };
+  };
+
+  const replaceInlineTranslatorRefs = (container, notes, definitionElements) => {
+    if (!container || !notes.size) {
+      return;
+    }
+
+    const markerMatcher = /\[(\d+)\]/gu;
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+    const textNodes = [];
+
+    while (walker.nextNode()) {
+      textNodes.push(walker.currentNode);
+    }
+
+    for (const textNode of textNodes) {
+      const parent = textNode.parentElement;
+      if (!parent) {
+        continue;
+      }
+
+      if (parent.closest("pre, code, a, script, style")) {
+        continue;
+      }
+
+      if (parent.closest("p, li") && definitionElements.has(parent.closest("p, li"))) {
+        continue;
+      }
+
+      const text = textNode.nodeValue || "";
+      if (!markerMatcher.test(text)) {
+        markerMatcher.lastIndex = 0;
+        continue;
+      }
+      markerMatcher.lastIndex = 0;
+
+      const fragment = document.createDocumentFragment();
+      let lastIndex = 0;
+      let changed = false;
+      let match = markerMatcher.exec(text);
+      while (match) {
+        const [full, noteNumber] = match;
+        const start = match.index;
+
+        if (start > lastIndex) {
+          fragment.appendChild(document.createTextNode(text.slice(lastIndex, start)));
+        }
+
+        const noteText = notes.get(noteNumber);
+        if (noteText) {
+          const marker = document.createElement("sup");
+          marker.className = "tnote-ref";
+          marker.textContent = full;
+          marker.setAttribute("tabindex", "0");
+          marker.setAttribute("aria-label", `Translator note ${noteNumber}: ${noteText}`);
+          marker.dataset.noteText = noteText;
+          fragment.appendChild(marker);
+          changed = true;
+        } else {
+          fragment.appendChild(document.createTextNode(full));
+        }
+
+        lastIndex = start + full.length;
+        match = markerMatcher.exec(text);
+      }
+
+      if (lastIndex < text.length) {
+        fragment.appendChild(document.createTextNode(text.slice(lastIndex)));
+      }
+
+      if (changed) {
+        textNode.parentNode.replaceChild(fragment, textNode);
+      }
+    }
+  };
+
+  const { notes: translatorNotes, definitionElements } = collectTranslatorNotes(readerContent);
+  replaceInlineTranslatorRefs(readerContent, translatorNotes, definitionElements);
+
   const widthSlider = document.querySelector("[data-reader-width-slider]");
   const widthValue = document.querySelector("[data-reader-width-value]");
   const widthStorageKey = "rezeror:reader-width";
@@ -51,11 +158,6 @@
   const initialScroll = Number(root.getAttribute("data-saved-scroll") || "0");
   const rawHasSavedProgress = (root.getAttribute("data-has-saved-progress") || "").toLowerCase();
   const hasSavedProgress = rawHasSavedProgress === "1" || rawHasSavedProgress === "true";
-
-  const normalizeText = (value) =>
-    (value || "")
-      .replace(/[\s\u3000]+/gu, " ")
-      .trim();
 
   const isSeparatorLike = (rawText) => {
     const compact = (rawText || "").replace(/[\s\u3000]+/gu, "");

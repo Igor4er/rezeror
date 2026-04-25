@@ -89,6 +89,59 @@ a:hover {
   overflow-x: auto;
 }
 
+.tnote-ref {
+  position: relative;
+  display: inline-block;
+  font-size: 0.72em;
+  line-height: 1;
+  vertical-align: super;
+  color: var(--accent);
+  cursor: help;
+  margin-left: 0.06em;
+}
+
+.tnote-ref:focus-visible {
+  outline: 1px solid #e9c482;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.tnote-ref:hover::after,
+.tnote-ref:focus-visible::after {
+  content: attr(data-note-text);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 0.55rem);
+  transform: translateX(-50%);
+  z-index: 30;
+  width: max-content;
+  max-width: min(34rem, calc(100vw - 2rem));
+  background: #13100a;
+  border: 1px solid #8a6a37;
+  color: #f9f3e6;
+  border-radius: 10px;
+  padding: 0.45rem 0.6rem;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+  font-size: 0.92rem;
+  line-height: 1.4;
+  white-space: normal;
+}
+
+.tnote-ref:hover::before,
+.tnote-ref:focus-visible::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 0.2rem);
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 6px solid #8a6a37;
+  transform: translateX(-50%);
+  z-index: 31;
+}
+
 .prose h1,
 .prose h2,
 .prose h3 {
