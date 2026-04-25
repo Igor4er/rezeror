@@ -83,7 +83,7 @@ main {
 
 .library-wrap,
 .reader-wrap {
-  padding-bottom: clamp(8rem, 42vh, 20rem);
+  padding-bottom: clamp(11rem, 55vh, 26rem);
 }
 
 .library-list,
