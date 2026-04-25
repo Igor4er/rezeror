@@ -126,11 +126,18 @@
   const minWidth = 620;
   const maxWidth = 1100;
   const widthStep = 20;
-  const minFontSize = 16;
-  const maxFontSize = 28;
-  const fontStep = 1;
+  const minFontSize = 14;
+  const maxFontSize = 24;
+  const fontStep = 0.5;
   let currentWidth = 760;
-  let currentFontSize = 19;
+  let currentFontSize = 18;
+
+  const formatFontSize = (value) => {
+    if (Number.isInteger(value)) {
+      return String(value);
+    }
+    return value.toFixed(1).replace(/\.0$/, "");
+  };
 
   const updateRulerUI = () => {
     if (!rulerTrack) {
@@ -189,15 +196,16 @@
     const handleLeft = railRect.width * progress;
 
     fontHandle.style.left = `${handleLeft}px`;
+    const formattedFontSize = formatFontSize(currentFontSize);
     fontHandle.setAttribute("aria-valuenow", String(currentFontSize));
-    fontHandle.setAttribute("aria-valuetext", `${currentFontSize} pixels`);
+    fontHandle.setAttribute("aria-valuetext", `${formattedFontSize} pixels`);
 
     if (fontFill) {
       fontFill.style.width = `${handleLeft}px`;
     }
 
     if (fontValue) {
-      fontValue.textContent = `${currentFontSize}px`;
+      fontValue.textContent = `${formattedFontSize}px`;
     }
   };
 
@@ -227,9 +235,9 @@
   }
 
   try {
-    applyReaderFontSize(window.localStorage.getItem(fontStorageKey) || 19, false);
+    applyReaderFontSize(window.localStorage.getItem(fontStorageKey) || 18, false);
   } catch (_) {
-    applyReaderFontSize(19, false);
+    applyReaderFontSize(18, false);
   }
 
   const makeHandleDraggable = (handle, side) => {
