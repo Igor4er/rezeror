@@ -75,9 +75,13 @@ main {
 }
 
 .library-wrap,
-.toc-wrap,
-.reader-wrap {
+.toc-wrap {
   max-width: 860px;
+  margin: 0 auto;
+}
+
+.reader-wrap {
+  max-width: 1200px;
   margin: 0 auto;
 }
 
