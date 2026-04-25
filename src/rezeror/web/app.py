@@ -4,6 +4,7 @@ from datetime import timedelta
 import io
 import json
 from pathlib import Path
+import re
 import secrets
 import time
 from typing import Any
@@ -84,6 +85,34 @@ ALLOWED_HTML_ATTRIBUTES: dict[str, set[str]] = {
 }
 
 ALLOWED_HTML_PROTOCOLS = {"http", "https", "mailto"}
+
+
+def _format_chapter_display_title(metadata: dict[str, Any], fallback: str) -> str:
+    raw_arc = str(metadata.get("arc") or "").strip()
+    raw_chapter = str(metadata.get("chapter") or metadata.get("title") or "").strip()
+
+    arc_part = ""
+    chapter_part = ""
+
+    arc_match = re.search(r"\barc\s+(\d+)\b", raw_arc, flags=re.IGNORECASE)
+    if arc_match:
+        arc_part = f"Arc {arc_match.group(1)}"
+
+    chapter_match = re.search(r"\bchapter\s+(\d+)\b", raw_chapter, flags=re.IGNORECASE)
+    if chapter_match:
+        chapter_number = chapter_match.group(1)
+        chapter_tail = raw_chapter[chapter_match.end():].strip(" :-\u2013\u2014")
+        chapter_part = f"Chapter {chapter_number}"
+        if chapter_tail:
+            chapter_part += f" {chapter_tail}"
+
+    if arc_part and chapter_part:
+        return f"{arc_part}, {chapter_part}"
+    if chapter_part:
+        return chapter_part
+    if raw_chapter:
+        return raw_chapter
+    return fallback
 
 
 def _load_manifest_entries() -> list[dict[str, Any]]:
@@ -477,11 +506,13 @@ def create_app() -> Flask:
         prev_entry, next_entry = _adjacent_entries(chapter_path, entries)
         saved_scroll = get_progress(chapter_path)
         has_saved_progress = has_progress(chapter_path)
+        chapter_display_title = _format_chapter_display_title(metadata, chapter_path)
 
         return render_template(
             "reader.html",
             chapter_path=chapter_path,
             metadata=metadata,
+            chapter_display_title=chapter_display_title,
             html=html,
             prev_entry=prev_entry,
             next_entry=next_entry,

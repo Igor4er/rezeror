@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 
-{% block title %}{{ metadata.title or chapter_path }} - Rezeror{% endblock %}
+{% block title %}{{ chapter_display_title }} - Rezeror{% endblock %}
+{% block header_title %}{{ chapter_display_title }}{% endblock %}
 
 {% block content %}
 <section

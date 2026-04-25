@@ -29,11 +29,42 @@ body {
   background: rgba(10, 10, 10, 0.78);
 }
 
+.site-header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  min-height: 2rem;
+}
+
+.site-header-title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 56vw;
+  color: var(--muted);
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+  pointer-events: none;
+}
+
 .brand {
   color: var(--accent);
   text-decoration: none;
   font-size: 1.2rem;
   letter-spacing: 0.03em;
+}
+
+.site-header-auth {
+  justify-self: end;
+}
+
+.site-header-auth form {
+  margin: 0;
 }
 
 main {
@@ -182,6 +213,15 @@ a:hover {
   padding: 0.45rem 0.9rem;
 }
 
+.btn-sm {
+  font-size: 0.78rem;
+  padding: 0.24rem 0.58rem;
+}
+
+.owner-auth-btn {
+  letter-spacing: 0.02em;
+}
+
 .btn:hover {
   background: #2a2118;
 }
@@ -275,6 +315,15 @@ a:hover {
 }
 
 @media (max-width: 720px) {
+  .site-header {
+    padding: 0.72rem 0.8rem;
+  }
+
+  .site-header-title {
+    max-width: 50vw;
+    font-size: 0.84rem;
+  }
+
   .reader-content {
     padding: 1rem 0.9rem;
   }

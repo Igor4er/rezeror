@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 
 {% block title %}Contents - {{ metadata.title or chapter_path }}{% endblock %}
+{% block header_title %}{{ metadata.title or chapter_path }}{% endblock %}
 
 {% block content %}
 <section class="toc-wrap">
