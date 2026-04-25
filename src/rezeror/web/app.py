@@ -221,10 +221,8 @@ def _require_owner_json() -> ResponseReturnValue | None:
 
 
 def _client_addr() -> str:
-    forwarded = request.headers.get("X-Forwarded-For", "").strip()
-    if forwarded:
-        return forwarded.split(",", 1)[0].strip()
-    return request.remote_addr or "unknown"
+    forwarded = request.headers.get("X-Real-IP", request.headers.get("X-Forwarded-For", "unknown"))
+    return forwarded.split(",", 1)[0].strip()
 
 
 def _is_login_allowed(username: str) -> bool:
