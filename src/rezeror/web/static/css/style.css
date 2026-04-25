@@ -6,9 +6,9 @@
   --muted: #b7b2a7;
   --accent: #dbb36b;
   --border: #2b2b2b;
-  --reader-content-width: 760px;
-  --reader-font-size: 18px;
-  --reader-text-color: #f2f0e9;
+  --reader-content-width: 900px;
+  --reader-font-size: 16.5px;
+  --reader-text-color: rgb(192 185 174);
 }
 
 * {

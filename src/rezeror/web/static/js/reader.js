@@ -137,9 +137,9 @@
   const minContrast = 70;
   const maxContrast = 115;
   const contrastStep = 2;
-  let currentWidth = 760;
-  let currentFontSize = 18;
-  let currentContrast = 100;
+  let currentWidth = 900;
+  let currentFontSize = 16.5;
+  let currentContrast = 74;
 
   const formatFontSize = (value) => {
     if (Number.isInteger(value)) {
@@ -308,21 +308,21 @@
   };
 
   try {
-    applyReaderWidth(window.localStorage.getItem(widthStorageKey) || 760, false);
+    applyReaderWidth(window.localStorage.getItem(widthStorageKey) || 900, false);
   } catch (_) {
-    applyReaderWidth(760, false);
+    applyReaderWidth(900, false);
   }
 
   try {
-    applyReaderFontSize(window.localStorage.getItem(fontStorageKey) || 18, false);
+    applyReaderFontSize(window.localStorage.getItem(fontStorageKey) || 16.5, false);
   } catch (_) {
-    applyReaderFontSize(18, false);
+    applyReaderFontSize(16.5, false);
   }
 
   try {
-    applyReaderContrast(window.localStorage.getItem(contrastStorageKey) || 100, false);
+    applyReaderContrast(window.localStorage.getItem(contrastStorageKey) || 74, false);
   } catch (_) {
-    applyReaderContrast(100, false);
+    applyReaderContrast(74, false);
   }
 
   const makeHandleDraggable = (handle, side) => {
