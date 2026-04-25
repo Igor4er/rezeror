@@ -81,6 +81,11 @@ main {
   margin: 0 auto;
 }
 
+.library-wrap,
+.reader-wrap {
+  padding-bottom: clamp(8rem, 42vh, 20rem);
+}
+
 .library-list,
 .toc-list {
   list-style: none;
