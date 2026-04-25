@@ -22,6 +22,10 @@
   </section>
 
   <div class="library-groups">
+    <aside class="library-scroll-context" hidden aria-live="polite" aria-atomic="true">
+      <span class="library-scroll-context-label">Current</span>
+      <strong class="library-scroll-context-value" data-library-context-value></strong>
+    </aside>
     {% for arc_group in grouped_entries %}
       <section class="arc-group">
         <h2 class="arc-title">{{ arc_group.arc }}</h2>
@@ -30,7 +34,7 @@
           <h3 class="phase-title">{{ phase_group.phase }}</h3>
           <ul class="library-list">
             {% for entry in phase_group.entries %}
-              <li>
+              <li class="library-entry" data-arc="{{ arc_group.arc }}" data-phase="{{ phase_group.phase }}">
                 <a href="{{ url_for('read_chapter', chapter_path=entry.file_path) }}">{{ entry.title }}</a>
               </li>
             {% endfor %}
@@ -40,4 +44,8 @@
     {% endfor %}
   </div>
 </section>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{{ url_for('static', filename='js/library.js') }}" defer></script>
 {% endblock %}
