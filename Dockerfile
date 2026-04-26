@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim AS builder
+FROM ghcr.io/astral-sh/uv:python3.14-alpine AS builder
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy
@@ -14,13 +14,15 @@ RUN uv sync --frozen --no-dev
 RUN uv pip install --python /app/.venv/bin/python --no-cache-dir gunicorn==23.0.0
 
 
-FROM python:3.14-slim-bookworm AS runtime
+FROM python:3.14-alpine AS runtime
 
 ARG APP_UID=1000
 ARG APP_GID=1000
 
-RUN groupadd --gid ${APP_GID} app \
-    && useradd --uid ${APP_UID} --gid ${APP_GID} --create-home --home-dir /home/app app \
+RUN apk add --no-cache wget
+
+RUN addgroup -g ${APP_GID} app \
+    && adduser -u ${APP_UID} -G app -h /home/app -D app \
     && mkdir -p /data /app \
     && chown -R app:app /data /app /home/app
 
@@ -35,6 +37,6 @@ USER app
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD python -c "import sys,urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/library', timeout=3); sys.exit(0)"
+    CMD wget -q -T 3 -O /dev/null http://127.0.0.1:8080/healthz || exit 1
 
-CMD ["/app/.venv/bin/gunicorn", "--pythonpath", "/app/src", "--bind", "0.0.0.0:8080", "--workers", "2", "--threads", "4", "--timeout", "60", "rezeror.web.wsgi:app"]
+CMD ["/app/.venv/bin/gunicorn", "--pythonpath", "/app/src", "--bind", "0.0.0.0:8080", "--workers", "1", "--threads", "2", "--timeout", "60", "rezeror.web.wsgi:app"]

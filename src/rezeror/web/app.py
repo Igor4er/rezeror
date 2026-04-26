@@ -536,6 +536,10 @@ def create_app() -> Flask:
             last_read_entry=last_read_entry,
         )
 
+    @app.get("/healthz")
+    def healthz() -> ResponseReturnValue:
+        return jsonify({"status": "ok"}), 200
+
     @app.get("/favicon.ico")
     def favicon() -> Response:
         return app.send_static_file("favicon.ico")
