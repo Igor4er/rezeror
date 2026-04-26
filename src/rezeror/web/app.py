@@ -72,6 +72,7 @@ ALLOWED_HTML_TAGS = {
     "h6",
     "hr",
     "li",
+    "img",
     "ol",
     "p",
     "pre",
@@ -87,6 +88,7 @@ ALLOWED_HTML_TAGS = {
 
 ALLOWED_HTML_ATTRIBUTES: dict[str, set[str]] = {
     "a": {"href", "title"},
+    "img": {"src", "alt", "title", "loading"},
     "th": {"colspan", "rowspan"},
     "td": {"colspan", "rowspan"},
 }

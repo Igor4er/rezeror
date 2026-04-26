@@ -287,3 +287,31 @@ def test_owner_logout_requires_csrf(app):
 
     allowed = client.post("/owner/logout", headers={"X-CSRF-Token": csrf_token})
     assert allowed.status_code == 302
+
+
+def test_render_markdown_preserves_safe_images():
+    html, _ = web_app._render_markdown_with_toc("![Cover](https://example.com/cover.jpg \"Cover\")")
+
+    assert "<img" in html
+    assert 'src="https://example.com/cover.jpg"' in html
+    assert 'alt="Cover"' in html
+
+
+def test_render_markdown_strips_unsafe_image_protocols():
+    html, _ = web_app._render_markdown_with_toc("![X](javascript:alert(1))")
+
+    assert "javascript:" not in html
+
+
+def test_read_chapter_renders_markdown_images(app):
+    chapter_path = "arc-1/chapter-1.md"
+    chapter_file = web_app.CHAPTERS_DIR / chapter_path
+    chapter_file.parent.mkdir(parents=True, exist_ok=True)
+    chapter_file.write_text("![Scene](https://example.com/scene.png)", encoding="utf-8")
+
+    response = app.test_client().get(f"/read/{chapter_path}")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "<img" in html
+    assert 'src="https://example.com/scene.png"' in html
