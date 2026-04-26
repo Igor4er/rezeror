@@ -10,8 +10,12 @@ WORKDIR /app
 COPY pyproject.toml uv.lock README.md main.py ./
 COPY src ./src
 
-RUN uv sync --frozen --no-dev
-RUN uv pip install --python /app/.venv/bin/python --no-cache-dir gunicorn==23.0.0
+ARG RAILWAY_SERVICE_ID
+
+RUN --mount=type=cache,id=s/${RAILWAY_SERVICE_ID}/root/.cache/uv,target=/root/.cache/uv \
+    uv sync --frozen --no-dev
+RUN --mount=type=cache,id=s/${RAILWAY_SERVICE_ID}/root/.cache/uv,target=/root/.cache/uv \
+    uv pip install --python /app/.venv/bin/python gunicorn==23.0.0
 
 
 FROM python:3.14-alpine AS runtime
