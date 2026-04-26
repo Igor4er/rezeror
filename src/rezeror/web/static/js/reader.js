@@ -9,6 +9,16 @@
       .replace(/[\s\u3000]+/gu, " ")
       .trim();
 
+  const createTranslatorMarker = (label, noteNumber, noteText) => {
+    const marker = document.createElement("sup");
+    marker.className = "tnote-ref";
+    marker.textContent = label;
+    marker.setAttribute("tabindex", "0");
+    marker.setAttribute("aria-label", `Translator note ${noteNumber}: ${noteText}`);
+    marker.dataset.noteText = noteText;
+    return marker;
+  };
+
   const readerContent = root.querySelector(".reader-content");
 
   const collectTranslatorNotes = (container) => {
@@ -82,12 +92,7 @@
 
         const noteText = notes.get(noteNumber);
         if (noteText) {
-          const marker = document.createElement("sup");
-          marker.className = "tnote-ref";
-          marker.textContent = full;
-          marker.setAttribute("tabindex", "0");
-          marker.setAttribute("aria-label", `Translator note ${noteNumber}: ${noteText}`);
-          marker.dataset.noteText = noteText;
+          const marker = createTranslatorMarker(full, noteNumber, noteText);
           fragment.appendChild(marker);
           changed = true;
         } else {
@@ -108,7 +113,56 @@
     }
   };
 
+  const replaceAnchorTranslatorRefs = (container, notes, definitionElements) => {
+    if (!container || !notes.size) {
+      return;
+    }
+
+    const anchors = container.querySelectorAll('a[href^="#_ftn"]');
+
+    for (const anchor of anchors) {
+      const parent = anchor.parentElement;
+      if (!parent) {
+        continue;
+      }
+
+      if (parent.closest("pre, code, script, style")) {
+        continue;
+      }
+
+      const block = parent.closest("p, li");
+      if (block && definitionElements.has(block)) {
+        continue;
+      }
+
+      const href = (anchor.getAttribute("href") || "").trim();
+      const hrefMatch = href.match(/^#_ftn(?:ref)?(\d+)$/u);
+      if (!hrefMatch) {
+        continue;
+      }
+
+      const text = normalizeText(anchor.textContent || "");
+      const markerMatch = text.match(/^\[(\d+)\]$/u);
+      if (!markerMatch) {
+        continue;
+      }
+
+      const noteNumber = markerMatch[1];
+      if (noteNumber !== hrefMatch[1]) {
+        continue;
+      }
+
+      const noteText = notes.get(noteNumber);
+      if (!noteText) {
+        continue;
+      }
+
+      anchor.replaceWith(createTranslatorMarker(text, noteNumber, noteText));
+    }
+  };
+
   const { notes: translatorNotes, definitionElements } = collectTranslatorNotes(readerContent);
+  replaceAnchorTranslatorRefs(readerContent, translatorNotes, definitionElements);
   replaceInlineTranslatorRefs(readerContent, translatorNotes, definitionElements);
 
   const rulerTrack = document.querySelector("[data-ruler-track]");
