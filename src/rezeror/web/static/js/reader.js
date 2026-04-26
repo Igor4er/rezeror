@@ -148,11 +148,17 @@
       }
 
       const noteNumber = markerMatch[1];
-      if (noteNumber !== hrefMatch[1]) {
+      const hrefNoteNumber = hrefMatch[1];
+      const resolvedNoteNumber = notes.has(hrefNoteNumber)
+        ? hrefNoteNumber
+        : notes.has(noteNumber)
+          ? noteNumber
+          : null;
+      if (!resolvedNoteNumber) {
         continue;
       }
 
-      const noteText = notes.get(noteNumber);
+      const noteText = notes.get(resolvedNoteNumber);
       if (!noteText) {
         continue;
       }
