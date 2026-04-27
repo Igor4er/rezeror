@@ -1,5 +1,7 @@
 {% extends "base.html" %}
 
+{% block body_class %} class="page-reader"{% endblock %}
+
 {% block title %}{{ chapter_display_title }} - Rezeror{% endblock %}
 {% block header_title %}{{ chapter_display_title }}{% endblock %}
 
@@ -27,7 +29,7 @@
           <span class="reader-metric-icon" aria-hidden="true">Ct</span>
           <span class="reader-width-value" data-reader-contrast-value>74%</span>
         </span>
-        <span class="reader-metric">
+        <span class="reader-metric reader-metric-width">
           <span class="reader-metric-icon" aria-hidden="true">&lt;&gt;</span>
           <span class="reader-width-value" data-reader-width-value>900px</span>
         </span>

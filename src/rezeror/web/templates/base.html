@@ -10,7 +10,7 @@
     <title>{% block title %}Rezeror{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   </head>
-  <body>
+  <body{% block body_class %}{% endblock %}>
     <header class="site-header">
       <div class="site-header-inner">
         <a class="brand" href="{{ url_for('library') }}">Rezeror</a>

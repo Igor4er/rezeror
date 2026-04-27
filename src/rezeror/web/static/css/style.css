@@ -631,6 +631,10 @@ a:hover {
 }
 
 @media (max-width: 720px) {
+  body {
+    overflow-x: hidden;
+  }
+
   .site-header {
     padding: 0.72rem 0.8rem;
   }
@@ -640,8 +644,30 @@ a:hover {
     font-size: 0.84rem;
   }
 
+  .page-reader .owner-auth-btn {
+    display: none;
+  }
+
+  .page-reader .site-header-title {
+    /* 6rem accounts for the brand logo on the left when the auth button is hidden */
+    max-width: calc(100% - 6rem);
+    position: static;
+    transform: none;
+    flex: 1;
+    text-align: center;
+  }
+
   .reader-content {
+    max-width: 100%;
     padding: 1rem 0.9rem;
+  }
+
+  .reader-ruler {
+    display: none;
+  }
+
+  .reader-metric-width {
+    display: none;
   }
 
   .reader-controls {
