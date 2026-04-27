@@ -1,20 +1,12 @@
 from __future__ import annotations
 
 from datetime import timedelta
-import io
-import json
-from pathlib import Path
-import re
 import secrets
 import time
 from typing import Any
 from urllib.parse import urlsplit
 import zipfile
 import hmac
-import markdown
-import nh3
-import yaml
-from bs4 import BeautifulSoup
 from flask import Flask, abort, jsonify, redirect, render_template, request, session, url_for
 from flask import Response
 from flask.typing import ResponseReturnValue
@@ -32,7 +24,15 @@ from rezeror.config import (
     owner_session_days,
     session_secret,
 )
-from rezeror.parser.storage import load_json
+from rezeror.web.content import (
+    adjacent_entries,
+    format_chapter_display_title,
+    group_entries,
+    load_manifest_entries,
+    read_markdown_with_front_matter,
+    render_markdown_with_toc,
+    safe_chapter_abs_path,
+)
 from rezeror.web.progress import (
     get_last_read_chapter_path,
     get_progress,
@@ -40,6 +40,7 @@ from rezeror.web.progress import (
     init_progress_db,
     save_progress,
 )
+from rezeror.web.uploads import import_content_archive
 
 
 MAX_UPLOAD_ARCHIVE_BYTES = 120_000_000
@@ -57,159 +58,33 @@ CSRF_TOKEN_KEY = "owner_csrf_token"
 CSRF_HEADER_NAME = "X-CSRF-Token"
 BLOCKED_LANGUAGE_PRIMARY_SUBTAG = "ur"[::-1]
 
-ALLOWED_HTML_TAGS = {
-    "a",
-    "blockquote",
-    "br",
-    "code",
-    "del",
-    "em",
-    "h1",
-    "h2",
-    "h3",
-    "h4",
-    "h5",
-    "h6",
-    "hr",
-    "li",
-    "img",
-    "ol",
-    "p",
-    "pre",
-    "strong",
-    "table",
-    "tbody",
-    "td",
-    "th",
-    "thead",
-    "tr",
-    "ul",
-}
-
-ALLOWED_HTML_ATTRIBUTES: dict[str, set[str]] = {
-    "a": {"href", "title"},
-    "img": {"src", "alt", "title", "loading"},
-    "th": {"colspan", "rowspan"},
-    "td": {"colspan", "rowspan"},
-}
-
-ALLOWED_HTML_PROTOCOLS = {"http", "https", "mailto"}
-
 
 def _format_chapter_display_title(metadata: dict[str, Any], fallback: str) -> str:
-    raw_arc = str(metadata.get("arc") or "").strip()
-    raw_chapter = str(metadata.get("chapter") or metadata.get("title") or "").strip()
-
-    arc_part = ""
-    chapter_part = ""
-
-    arc_match = re.search(r"\barc\s+(\d+)\b", raw_arc, flags=re.IGNORECASE)
-    if arc_match:
-        arc_part = f"Arc {arc_match.group(1)}"
-
-    chapter_match = re.search(r"\bchapter\s+(\d+)\b", raw_chapter, flags=re.IGNORECASE)
-    if chapter_match:
-        chapter_number = chapter_match.group(1)
-        chapter_tail = raw_chapter[chapter_match.end():].strip(" :-\u2013\u2014")
-        chapter_part = f"Chapter {chapter_number}"
-        if chapter_tail:
-            chapter_part += f" {chapter_tail}"
-
-    if arc_part and chapter_part:
-        return f"{arc_part}, {chapter_part}"
-    if chapter_part:
-        return chapter_part
-    if raw_chapter:
-        return raw_chapter
-    return fallback
+    return format_chapter_display_title(metadata, fallback)
 
 
 def _load_manifest_entries() -> list[dict[str, Any]]:
-    manifest = load_json(MANIFEST_PATH, {"entries": []})
-    return manifest.get("entries", [])
+    return load_manifest_entries(MANIFEST_PATH)
 
 
-def _safe_chapter_abs_path(chapter_path: str) -> Path:
-    candidate = (CHAPTERS_DIR / chapter_path).resolve()
-    chapters_root = CHAPTERS_DIR.resolve()
-    if chapters_root not in candidate.parents and candidate != chapters_root:
-        raise ValueError("Invalid chapter path")
-    return candidate
+def _safe_chapter_abs_path(chapter_path: str):
+    return safe_chapter_abs_path(chapter_path, CHAPTERS_DIR)
 
 
 def _read_markdown_with_front_matter(chapter_path: str) -> tuple[dict[str, Any], str]:
-    abs_path = _safe_chapter_abs_path(chapter_path)
-    if not abs_path.exists():
-        raise FileNotFoundError(chapter_path)
-
-    text = abs_path.read_text(encoding="utf-8")
-    if text.startswith("---\n"):
-        parts = text.split("\n---\n", 1)
-        if len(parts) == 2:
-            front_matter_text = parts[0][4:]
-            body = parts[1].lstrip("\n")
-            metadata = yaml.safe_load(front_matter_text) or {}
-            return metadata, body
-    return {}, text
+    return read_markdown_with_front_matter(chapter_path, CHAPTERS_DIR)
 
 
 def _render_markdown_with_toc(markdown_text: str) -> tuple[str, list[dict[str, str]]]:
-    md = markdown.Markdown(extensions=["toc", "fenced_code", "tables"])
-    raw_html = md.convert(markdown_text)
-    html = nh3.clean(
-        raw_html,
-        tags=ALLOWED_HTML_TAGS,
-        attributes=ALLOWED_HTML_ATTRIBUTES,
-        url_schemes=ALLOWED_HTML_PROTOCOLS,
-    )
-
-    soup = BeautifulSoup(html, "html.parser")
-    toc_items: list[dict[str, str]] = []
-    for heading in soup.select("h1[id], h2[id], h3[id], h4[id], h5[id], h6[id]"):
-        heading_id = heading.get("id", "")
-        if not isinstance(heading_id, str):
-            heading_id = ""
-        heading_level = str(heading.name or "")
-        toc_items.append(
-            {
-                "id": heading_id,
-                "level": heading_level,
-                "text": heading.get_text(" ", strip=True),
-            }
-        )
-    return html, toc_items
+    return render_markdown_with_toc(markdown_text)
 
 
 def _adjacent_entries(chapter_path: str, entries: list[dict[str, Any]]) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
-    index = next((i for i, item in enumerate(entries) if item.get("file_path") == chapter_path), None)
-    if index is None:
-        return None, None
-
-    prev_entry = entries[index - 1] if index > 0 else None
-    next_entry = entries[index + 1] if index < len(entries) - 1 else None
-    return prev_entry, next_entry
+    return adjacent_entries(chapter_path, entries)
 
 
 def _group_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    grouped: dict[str, dict[str, list[dict[str, Any]]]] = {}
-    for entry in entries:
-        arc = entry.get("arc") or "Unknown Arc"
-        phase = entry.get("phase") or "Main"
-        arc_bucket = grouped.setdefault(arc, {})
-        phase_bucket = arc_bucket.setdefault(phase, [])
-        phase_bucket.append(entry)
-
-    grouped_list: list[dict[str, Any]] = []
-    for arc, phases in grouped.items():
-        phase_groups = [{"phase": phase, "entries": phase_entries} for phase, phase_entries in phases.items()]
-        grouped_list.append(
-            {
-                "arc": arc,
-                "phases": phase_groups,
-                "count": sum(len(group["entries"]) for group in phase_groups),
-            }
-        )
-    return grouped_list
+    return group_entries(entries)
 
 
 def _owner_logged_in() -> bool:
@@ -361,117 +236,17 @@ def _owner_password_matches(submitted_password: str) -> bool:
     return hmac.compare_digest(expected_password, submitted_password)
 
 
-def _validate_uploaded_json(target: Path, data: bytes) -> None:
-    try:
-        payload = json.loads(data.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise ValueError(f"invalid JSON payload for {target.name}") from exc
-
-    if target == MANIFEST_PATH:
-        if not isinstance(payload, dict) or not isinstance(payload.get("entries", []), list):
-            raise ValueError("manifest.json must be an object with an entries list")
-        return
-
-    if target == SYNC_STATE_PATH:
-        if not isinstance(payload, dict) or not isinstance(payload.get("entries", {}), dict):
-            raise ValueError("sync_state.json must be an object with an entries object")
-
-
-def _validate_uploaded_content(target: Path, data: bytes) -> None:
-    if target == MANIFEST_PATH or target == SYNC_STATE_PATH:
-        _validate_uploaded_json(target, data)
-        return
-    if target == PROGRESS_DB_PATH:
-        if not data.startswith(b"SQLite format 3\x00"):
-            raise ValueError("progress.sqlite3 is not a valid sqlite3 file")
-        return
-    if target.suffix != ".md":
-        raise ValueError("unsupported uploaded file type")
-    try:
-        data.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        raise ValueError("chapter markdown files must be UTF-8 encoded") from exc
-
-
-def _write_bytes_atomically(target: Path, data: bytes) -> None:
-    target.parent.mkdir(parents=True, exist_ok=True)
-    temp = target.with_suffix(target.suffix + ".upload.tmp")
-    temp.write_bytes(data)
-    temp.replace(target)
-
-
-def _safe_upload_target(member_name: str) -> Path | None:
-    if not member_name or "\x00" in member_name or "\\" in member_name:
-        return None
-
-    pure = Path(member_name)
-    if pure.is_absolute() or ".." in pure.parts:
-        return None
-
-    normalized = pure.as_posix().lstrip("/")
-    if normalized.startswith("/"):
-        return None
-
-    if normalized == "state/manifest.json":
-        return MANIFEST_PATH
-    if normalized == "state/sync_state.json":
-        return SYNC_STATE_PATH
-    if normalized == "progress.sqlite3":
-        return PROGRESS_DB_PATH
-    if normalized.startswith("chapters/") and normalized.endswith(".md"):
-        rel = normalized[len("chapters/"):]
-        chapter_target = CHAPTERS_DIR / rel
-        if CHAPTERS_DIR.resolve() not in chapter_target.resolve().parents and chapter_target.resolve() != CHAPTERS_DIR.resolve():
-            return None
-        return chapter_target
-    return None
-
-
 def _import_content_archive(archive_bytes: bytes) -> dict[str, int]:
-    total_uncompressed = 0
-    imported = 0
-    skipped = 0
-    pending_writes: list[tuple[Path, bytes]] = []
-
-    with zipfile.ZipFile(io.BytesIO(archive_bytes)) as zf:
-        infos = zf.infolist()
-        if len(infos) > MAX_ARCHIVE_FILES:
-            raise ValueError("archive has too many files")
-
-        for info in infos:
-            if info.is_dir():
-                continue
-
-            if info.file_size > MAX_SINGLE_FILE_BYTES:
-                raise ValueError(f"archive member too large: {info.filename}")
-            if info.compress_size > 0 and info.file_size / info.compress_size > 200:
-                raise ValueError(f"archive member compression ratio is too high: {info.filename}")
-
-            target = _safe_upload_target(info.filename)
-            if target is None:
-                skipped += 1
-                continue
-
-            total_uncompressed += info.file_size
-            if total_uncompressed > MAX_TOTAL_UNCOMPRESSED_BYTES:
-                raise ValueError("archive is too large")
-
-            with zf.open(info, "r") as src:
-                data = src.read(MAX_SINGLE_FILE_BYTES + 1)
-            if len(data) > MAX_SINGLE_FILE_BYTES:
-                raise ValueError(f"archive member too large after extraction: {info.filename}")
-
-            _validate_uploaded_content(target, data)
-            pending_writes.append((target, data))
-
-    for target, data in pending_writes:
-        _write_bytes_atomically(target, data)
-        imported += 1
-
-    return {
-        "imported": imported,
-        "skipped": skipped,
-    }
+    return import_content_archive(
+        archive_bytes,
+        chapters_dir=CHAPTERS_DIR,
+        manifest_path=MANIFEST_PATH,
+        sync_state_path=SYNC_STATE_PATH,
+        progress_db_path=PROGRESS_DB_PATH,
+        max_archive_files=MAX_ARCHIVE_FILES,
+        max_total_uncompressed_bytes=MAX_TOTAL_UNCOMPRESSED_BYTES,
+        max_single_file_bytes=MAX_SINGLE_FILE_BYTES,
+    )
 
 
 def create_app() -> Flask:
