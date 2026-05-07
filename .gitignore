@@ -11,4 +11,5 @@ wheels/
 
 # Generated chapter data, parser state, and progress DB
 data/
+data-save/
 .env

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from rezeror.parser.chapters import html_fragment_to_markdown
+from rezeror.parser.chapters import extract_chapter_content_html, html_fragment_to_markdown
 from rezeror.parser.toc import parse_toc_entries
 
 
@@ -27,3 +27,32 @@ def test_markdown_conversion_preserves_emphasis() -> None:
     md = html_fragment_to_markdown(html)
     assert "**Bold**" in md
     assert "*italic*" in md
+
+
+def test_extract_chapter_content_excludes_user_comments() -> None:
+        html = """
+        <html>
+            <body>
+                <main>
+                    <article>
+                        <div class="post-content">
+                            <p>Chapter text line.</p>
+                            <div id="jp-post-flair">Share this</div>
+                        </div>
+                        <div class="comments">
+                            <ol class="comment-list">
+                                <li><article class="comment-body"><p>Very long user comment</p></article></li>
+                            </ol>
+                            <div id="respond">Reply form</div>
+                        </div>
+                    </article>
+                </main>
+            </body>
+        </html>
+        """
+        content_html = extract_chapter_content_html(html)
+
+        assert "Chapter text line." in content_html
+        assert "Very long user comment" not in content_html
+        assert "comment-list" not in content_html
+        assert "Share this" not in content_html
