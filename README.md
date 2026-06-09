@@ -1,6 +1,8 @@
 # Rezeror
 
 [Rezeror](https://rezeror.ig4er.link/library) is a uv-based Python 3.14+ app.
+
+
 <img width="930" height="462" alt="image" src="https://github.com/user-attachments/assets/f053cc17-10ce-4b7a-9571-ab5277cbb0a0" />
 
 
