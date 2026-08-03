@@ -9,6 +9,9 @@ wheels/
 # Virtual environments
 .venv
 
+# macOS Finder metadata
+.DS_Store
+
 # Generated chapter data, parser state, and progress DB
 data/
 data-save/
