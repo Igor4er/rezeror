@@ -315,3 +315,14 @@ def test_read_chapter_renders_markdown_images(app):
     html = response.get_data(as_text=True)
     assert "<img" in html
     assert 'src="https://example.com/scene.png"' in html
+
+
+def test_robots_txt_disallows_everything_except_library_and_read(app):
+    response = app.test_client().get("/robots.txt")
+
+    assert response.status_code == 200
+    assert response.mimetype == "text/plain"
+    body = response.get_data(as_text=True)
+    assert "Disallow: /\n" in body
+    assert "Allow: /library" in body
+    assert "Allow: /read/" in body

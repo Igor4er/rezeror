@@ -321,6 +321,16 @@ def create_app() -> Flask:
     def favicon() -> Response:
         return app.send_static_file("favicon.ico")
 
+    @app.get("/robots.txt")
+    def robots_txt() -> Response:
+        body = (
+            "User-agent: *\n"
+            "Disallow: /\n"
+            "Allow: /library\n"
+            "Allow: /read/\n"
+        )
+        return Response(body, mimetype="text/plain")
+
     @app.get("/read/<path:chapter_path>")
     def read_chapter(chapter_path: str) -> str:
         entries = _load_manifest_entries()
