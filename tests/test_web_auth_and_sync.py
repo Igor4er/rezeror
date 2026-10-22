@@ -77,6 +77,23 @@ def test_progress_write_requires_owner_login(app):
     assert body["has_saved_progress"] is True
 
 
+def test_session_secret_rotation_invalidates_existing_owner_sessions(app):
+    client = app.test_client()
+    login = client.post("/owner/login", json={"username": "owner", "password": "secret"})
+    assert login.status_code == 200
+    csrf_token = login.get_json()["csrf_token"]
+
+    app.config["SECRET_KEY"] = "rotated-test-secret-with-at-least-32-characters"
+    response = client.post(
+        "/api/progress",
+        json={"chapter_path": "arc-1/chapter-1.md", "scroll_y": 120},
+        headers={"X-CSRF-Token": csrf_token},
+    )
+
+    assert response.status_code == 403
+    assert response.get_json() == {"error": "owner authentication required"}
+
+
 def test_progress_read_hides_owner_state_from_non_owner(app):
     owner_client = app.test_client()
     payload = {

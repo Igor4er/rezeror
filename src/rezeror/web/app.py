@@ -259,6 +259,7 @@ def create_app() -> Flask:
         static_folder="static",
     )
     app.config["SECRET_KEY"] = session_secret()
+    app.config["SECRET_KEY_FALLBACKS"] = []
     app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=owner_session_days())
     app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_ARCHIVE_BYTES
     app.config["SESSION_COOKIE_HTTPONLY"] = True
