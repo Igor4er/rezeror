@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 import secrets
+from threading import Lock
 import time
 from typing import Any
 from urllib.parse import urlsplit
@@ -51,8 +52,12 @@ MAX_SCROLL_Y = 10_000_000
 
 LOGIN_WINDOW_SECONDS = 15 * 60
 LOGIN_MAX_ATTEMPTS = 8
+LOGIN_MAX_TRACKED_KEYS = 4_096
+LOGIN_MAX_USERNAME_LENGTH = 128
+LOGIN_MAX_CLIENT_ADDR_LENGTH = 64
 
 _login_attempts: dict[str, list[float]] = {}
+_login_attempts_lock = Lock()
 
 CSRF_TOKEN_KEY = "owner_csrf_token"
 CSRF_HEADER_NAME = "X-CSRF-Token"
@@ -111,28 +116,52 @@ def _require_owner_json() -> ResponseReturnValue | None:
 
 def _client_addr() -> str:
     forwarded = request.headers.get("X-Real-IP", request.headers.get("X-Forwarded-For", "unknown"))
-    return forwarded.split(",", 1)[0].strip()
+    return forwarded.split(",", 1)[0].strip()[:LOGIN_MAX_CLIENT_ADDR_LENGTH]
+
+
+def _login_attempt_key(username: str) -> str:
+    return f"{_client_addr()}:{username.lower()}"
+
+
+def _prune_login_attempts(now: float) -> None:
+    for key, attempts in tuple(_login_attempts.items()):
+        recent_attempts = [ts for ts in attempts if now - ts <= LOGIN_WINDOW_SECONDS]
+        if recent_attempts:
+            _login_attempts[key] = recent_attempts
+        else:
+            _login_attempts.pop(key, None)
+
+
+def _make_login_attempt_room(key: str) -> None:
+    if key not in _login_attempts and len(_login_attempts) >= LOGIN_MAX_TRACKED_KEYS:
+        oldest_key = min(_login_attempts, key=lambda item: _login_attempts[item][-1])
+        _login_attempts.pop(oldest_key)
 
 
 def _is_login_allowed(username: str) -> bool:
     now = time.time()
-    key = f"{_client_addr()}:{username.lower()}"
-    attempts = [ts for ts in _login_attempts.get(key, []) if now - ts <= LOGIN_WINDOW_SECONDS]
-    _login_attempts[key] = attempts
-    return len(attempts) < LOGIN_MAX_ATTEMPTS
+    key = _login_attempt_key(username)
+    with _login_attempts_lock:
+        _prune_login_attempts(now)
+        _make_login_attempt_room(key)
+        return len(_login_attempts.get(key, [])) < LOGIN_MAX_ATTEMPTS
 
 
 def _record_login_failure(username: str) -> None:
     now = time.time()
-    key = f"{_client_addr()}:{username.lower()}"
-    attempts = [ts for ts in _login_attempts.get(key, []) if now - ts <= LOGIN_WINDOW_SECONDS]
-    attempts.append(now)
-    _login_attempts[key] = attempts
+    key = _login_attempt_key(username)
+    with _login_attempts_lock:
+        _prune_login_attempts(now)
+        _make_login_attempt_room(key)
+        attempts = _login_attempts.setdefault(key, [])
+        attempts.append(now)
+        del attempts[:-LOGIN_MAX_ATTEMPTS]
 
 
 def _clear_login_failures(username: str) -> None:
-    key = f"{_client_addr()}:{username.lower()}"
-    _login_attempts.pop(key, None)
+    key = _login_attempt_key(username)
+    with _login_attempts_lock:
+        _login_attempts.pop(key, None)
 
 
 def _get_or_create_csrf_token() -> str:
@@ -381,6 +410,9 @@ def create_app() -> Flask:
 
         if not owner_auth_enabled():
             return _owner_login_failure("owner authentication is not configured", 503, next_path)
+
+        if len(username) > LOGIN_MAX_USERNAME_LENGTH:
+            return _owner_login_failure("invalid credentials", 403, next_path)
 
         if not _is_login_allowed(username):
             return _owner_login_failure("too many attempts, try again later", 429, next_path)

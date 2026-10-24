@@ -209,6 +209,36 @@ def test_owner_login_rate_limit_resets_after_success(app):
     assert blocked.get_json() == {"error": "too many attempts, try again later"}
 
 
+def test_owner_login_attempt_store_is_bounded_and_prunes_expired_keys(app, monkeypatch):
+    client = app.test_client()
+    now = [100.0]
+    monkeypatch.setattr(web_app.time, "time", lambda: now[0])
+    monkeypatch.setattr(web_app, "LOGIN_MAX_TRACKED_KEYS", 2)
+
+    for username in ("unknown-1", "unknown-2", "unknown-3"):
+        response = client.post("/owner/login", json={"username": username, "password": "wrong"})
+        assert response.status_code == 403
+
+    assert len(web_app._login_attempts) == 2
+
+    now[0] += web_app.LOGIN_WINDOW_SECONDS + 1
+    response = client.post("/owner/login", json={"username": "unknown-4", "password": "wrong"})
+
+    assert response.status_code == 403
+    assert len(web_app._login_attempts) == 1
+
+
+def test_owner_login_does_not_retain_oversized_usernames(app):
+    response = app.test_client().post(
+        "/owner/login",
+        json={"username": "u" * (web_app.LOGIN_MAX_USERNAME_LENGTH + 1), "password": "wrong"},
+    )
+
+    assert response.status_code == 403
+    assert response.get_json() == {"error": "invalid credentials"}
+    assert web_app._login_attempts == {}
+
+
 def test_content_upload_requires_owner_login_and_imports_chapters_and_state(app):
     client = app.test_client()
 
