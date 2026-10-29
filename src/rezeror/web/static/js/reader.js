@@ -20,6 +20,44 @@
   };
 
   const readerContent = root.querySelector(".reader-content");
+  const previousChapterLink = root.querySelector(".top-nav .nav-left a");
+  const nextChapterLink = root.querySelector(".top-nav .nav-right a");
+
+  document.addEventListener("keydown", (event) => {
+    if (
+      event.defaultPrevented ||
+      event.repeat ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.shiftKey
+    ) {
+      return;
+    }
+
+    const target = event.target;
+    if (
+      target instanceof Element &&
+      target.closest(
+        "input, textarea, select, [contenteditable]:not([contenteditable='false']), [role='slider']"
+      )
+    ) {
+      return;
+    }
+
+    let chapterLink = null;
+    if (event.key === "ArrowLeft") {
+      chapterLink = previousChapterLink;
+    } else if (event.key === "ArrowRight") {
+      chapterLink = nextChapterLink;
+    }
+    if (!chapterLink) {
+      return;
+    }
+
+    event.preventDefault();
+    window.location.assign(chapterLink.href);
+  });
 
   const collectTranslatorNotes = (container) => {
     if (!container) {
