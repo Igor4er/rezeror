@@ -594,6 +594,7 @@
       "japanese web novel source",
       "source:",
       "disclaimer",
+      "machine translation",
     ];
 
     return markers.some((marker) => text.includes(marker));
@@ -636,30 +637,30 @@
     }
 
     const separatorSearchLimit = Math.min(blocks.length, 45);
-    let firstSeparator = -1;
-    let lastSeparator = -1;
-    let separatorCount = 0;
+    const separatorIndexes = [];
 
     for (let i = 0; i < separatorSearchLimit; i += 1) {
       if (isSeparatorLike(normalizeText(blocks[i].textContent || ""))) {
-        if (firstSeparator === -1) {
-          firstSeparator = i;
-        }
-        lastSeparator = i;
-        separatorCount += 1;
+        separatorIndexes.push(i);
       }
     }
 
-    if (firstSeparator === -1 || firstSeparator > 20 || separatorCount < 2) {
+    if (separatorIndexes.length < 2 || separatorIndexes[0] > 20) {
       return null;
     }
 
-    const narrativeScanStart = lastSeparator + 1;
-    const narrativeScanEnd = Math.min(blocks.length, narrativeScanStart + 80);
+    for (let section = 0; section < separatorIndexes.length; section += 1) {
+      const scanStart = separatorIndexes[section] + 1;
+      const scanEnd = Math.min(
+        blocks.length,
+        separatorIndexes[section + 1] ?? scanStart + 80,
+        scanStart + 80
+      );
 
-    for (let i = narrativeScanStart; i < narrativeScanEnd; i += 1) {
-      if (looksNarrativeLike(blocks[i])) {
-        return blocks[i];
+      for (let i = scanStart; i < scanEnd; i += 1) {
+        if (looksNarrativeLike(blocks[i])) {
+          return blocks[i];
+        }
       }
     }
 

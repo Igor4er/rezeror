@@ -23,6 +23,7 @@ CREDIT_MARKERS = (
     "japanese web novel source",
     "source:",
     "disclaimer",
+    "machine translation",
 )
 
 
@@ -93,27 +94,47 @@ def _find_auto_start_index(blocks: list[str]) -> int | None:
     if not blocks:
         return None
 
-    first_separator = -1
-    last_separator = -1
-    separator_count = 0
-
-    for i, text in enumerate(blocks[:SEPARATOR_SEARCH_LIMIT]):
-        if _is_separator_like(text):
-            if first_separator == -1:
-                first_separator = i
-            last_separator = i
-            separator_count += 1
-
-    if first_separator == -1 or first_separator > 20 or separator_count < 2:
+    separator_indexes = [
+        i
+        for i, text in enumerate(blocks[:SEPARATOR_SEARCH_LIMIT])
+        if _is_separator_like(text)
+    ]
+    if len(separator_indexes) < 2 or separator_indexes[0] > 20:
         return None
 
-    scan_start = last_separator + 1
-    scan_end = min(len(blocks), scan_start + NARRATIVE_SCAN_WINDOW)
-    for i in range(scan_start, scan_end):
-        if _looks_narrative_like(blocks[i]):
-            return i
+    for section, separator_index in enumerate(separator_indexes):
+        scan_start = separator_index + 1
+        next_separator = (
+            separator_indexes[section + 1]
+            if section + 1 < len(separator_indexes)
+            else scan_start + NARRATIVE_SCAN_WINDOW
+        )
+        scan_end = min(len(blocks), next_separator, scan_start + NARRATIVE_SCAN_WINDOW)
+        for i in range(scan_start, scan_end):
+            if _looks_narrative_like(blocks[i]):
+                return i
 
     return None
+
+
+def test_credit_skip_detector_keeps_first_scene_before_later_separator() -> None:
+    separator = "△▼△▼△▼△"
+    opening_scene = "The incomprehensible situation overwhelmed Subaru's small brain."
+    blocks = [
+        separator,
+        "Machine Translated By:",
+        "Proofread By: Archbishop",
+        "Art Sources: AppleFresh379",
+        separator,
+        "This is an edited machine translation, which is expected to have a quality dip in accuracy.",
+        separator,
+        opening_scene,
+        "The situation was that shocking, it could not be said in any other way.",
+        separator,
+        "Without being aware of his death, Subaru had returned to this moment.",
+    ]
+
+    assert _find_auto_start_index(blocks) == 7
 
 
 def _iter_chapter_files() -> list[Path]:
